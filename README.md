@@ -8,6 +8,7 @@ PiecesOS records what you work on all day. Your coding agent starts every sessio
 This CLI reads your memory over MCP and writes the parts that belong to a repository into its
 context file, so the next agent already knows why the code looks the way it does.
 
+[![CI](https://github.com/tiagolauer/pieces-to-agents/actions/workflows/ci.yml/badge.svg)](https://github.com/tiagolauer/pieces-to-agents/actions/workflows/ci.yml)
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 [![Node](https://img.shields.io/badge/node-%E2%89%A5%2020.11-brightgreen.svg)](https://nodejs.org)
 [![Requires PiecesOS](https://img.shields.io/badge/requires-PiecesOS-orange.svg)](https://pieces.app/)

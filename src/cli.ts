@@ -1,3 +1,4 @@
+#!/usr/bin/env node
 import { stat } from 'node:fs/promises'
 import { basename, dirname, join, resolve } from 'node:path'
 import { createInterface } from 'node:readline/promises'
