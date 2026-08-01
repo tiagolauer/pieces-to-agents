@@ -6,7 +6,10 @@ export const DENY_LIST_FILENAME = '.pieces-to-agents-ignore'
 const REDACTED = '[redacted]'
 
 const SECRET_PATTERNS: ReadonlyArray<readonly [RegExp, string]> = [
-  [/[\w.+-]+@[\w-]+\.[\w.-]{2,}/g, '[email]'],
+  [/[\w.+-]+@[\w-]+(?:\.[\w-]+)*\.[a-z]{2,}\b/gi, '[email]'],
+  [/file:\/\/\/\S+/gi, '[local path]'],
+  [/\b[A-Za-z]:[\\/](?:[^\\/\n"'`)\]]*[\\/])*[^\s"'`)\]]*/g, '[local path]'],
+  [/(?:^|\s)\/(?:home|Users|mnt|srv)\/(?:[^/\n"'`)\]]*\/)*[^\s"'`)\]]*/g, ' [local path]'],
   [/\beyJ[A-Za-z0-9_-]{8,}\.[A-Za-z0-9_-]{8,}\.[A-Za-z0-9_-]+/g, '[jwt]'],
   [/\bgh[pousr]_[A-Za-z0-9]{16,}/g, '[github-token]'],
   [/\bxox[baprs]-[A-Za-z0-9-]{10,}/g, '[slack-token]'],

@@ -133,7 +133,6 @@ const run = async (): Promise<Result<string, SyncFailure>> => {
     project,
     aliases: values.alias ?? [],
     since,
-    deniedTerms,
   })
   if (!memories.ok) return memories
 

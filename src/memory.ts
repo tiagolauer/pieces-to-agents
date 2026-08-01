@@ -13,7 +13,6 @@ import {
   type Result,
 } from './core.ts'
 import type { McpClient } from './mcp.ts'
-import { redact } from './redact.ts'
 
 export type MemoryEntry = {
   readonly category: MemoryCategory
@@ -26,7 +25,6 @@ export type CollectOptions = {
   readonly project: string
   readonly aliases: ReadonlyArray<string>
   readonly since: Date
-  readonly deniedTerms: ReadonlyArray<string>
 }
 
 const foldForMatching = (value: string): string =>
@@ -202,7 +200,7 @@ export const collectMemories = async (
     bodyBySummaryId.set(summaryId, {
       title: readString(summary, 'name') ?? 'Untitled session',
       createdAt,
-      text: redact(text, options.deniedTerms),
+      text,
       category: bestCategoryBySummary.get(summaryId)?.category ?? MemoryCategory.ArchitectureDecisions,
     })
   }

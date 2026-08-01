@@ -10,12 +10,14 @@ import {
   type Result,
 } from './core.ts'
 import type { MemoryEntry } from './memory.ts'
+import { redact } from './redact.ts'
 import { isAnchoredToProject } from './vocabulary.ts'
 
 const MAX_BULLETS_PER_ENTRY = 6
 const MAX_BULLET_LENGTH = 280
 const MAX_ENTRIES_PER_CATEGORY = 4
 const BULLET_PATTERN = /^\s*[-*]\s+(.*)$/
+const BARE_LINK_PATTERN = /^\[[^\]]*\]\([^)]*\)[.\s]*$/
 
 export type BlockMetadata = {
   readonly project: string
@@ -47,10 +49,14 @@ const extractBullets = (text: string, filters: BulletFilters): ReadonlyArray<str
 
     const content = stripMarkdownEmphasis(match[1] ?? '')
     if (content.length === 0) continue
+    if (BARE_LINK_PATTERN.test(content)) continue
     if (mentionsDeniedTerm(content, filters.deniedTerms)) continue
     if (!isAnchoredToProject(content, filters.vocabulary)) continue
 
-    bullets.push(content.length > MAX_BULLET_LENGTH ? `${content.slice(0, MAX_BULLET_LENGTH)}…` : content)
+    const scrubbed = redact(content, filters.deniedTerms).replace(/\s{2,}/g, ' ').trim()
+    if (scrubbed.length === 0) continue
+
+    bullets.push(scrubbed.length > MAX_BULLET_LENGTH ? `${scrubbed.slice(0, MAX_BULLET_LENGTH)}…` : scrubbed)
     if (bullets.length === MAX_BULLETS_PER_ENTRY) break
   }
 

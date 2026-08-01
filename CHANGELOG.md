@@ -1,5 +1,22 @@
 # Changelog
 
+## 0.1.4
+
+Running the tool on its own repository surfaced four defects.
+
+The deny-list masked terms instead of dropping bullets, because redaction ran before the filter
+saw them. A bullet about the LICENSE file survived as "[redacted] Lauer". Redaction now runs last,
+on bullets that already passed every filter.
+
+Absolute paths reached the output and exposed the machine's directory layout, client folder names
+included. Windows drive paths, POSIX home paths and `file://` URIs are replaced, and folder names
+containing spaces no longer leave a trailing fragment behind.
+
+The email pattern matched package coordinates, so `pieces-to-agents@0.1.0` became a placeholder
+mid-sentence. It now requires an alphabetic top level domain.
+
+Bullets that are nothing but a markdown link are dropped.
+
 ## 0.1.3
 
 Filters memory at the bullet instead of the session.

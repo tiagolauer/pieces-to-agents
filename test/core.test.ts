@@ -63,6 +63,32 @@ test('redact removes emails and secret tokens', () => {
   assert.match(scrubbed, /\[github-token\]/)
 })
 
+test('redact leaves a package version alone', () => {
+  const scrubbed = redact('Deprecated pieces-to-agents@0.1.0 after the scoping bug')
+
+  assert.match(scrubbed, /pieces-to-agents@0\.1\.0/)
+  assert.doesNotMatch(scrubbed, /\[email\]/)
+})
+
+test('redact removes absolute paths from any platform', () => {
+  const windows = redact('Edited F:\\Fontes\\Clientes\\secret-app\\src\\core.ts today')
+  const unix = redact('Edited /home/tiago/clients/secret-app/src/core.ts today')
+  const fileUri = redact('Opened file:///F:/Fontes/Clientes/secret-app/package.json')
+
+  for (const scrubbed of [windows, unix, fileUri]) {
+    assert.doesNotMatch(scrubbed, /secret-app/)
+    assert.match(scrubbed, /\[local path\]/)
+  }
+})
+
+test('redact removes a path whose folders contain spaces', () => {
+  const scrubbed = redact('Refactored F:\\Fontes\\Client Work\\secret-app\\src\\core.ts')
+
+  assert.doesNotMatch(scrubbed, /secret-app/)
+  assert.doesNotMatch(scrubbed, /Client Work/)
+  assert.doesNotMatch(scrubbed, /core\.ts/)
+})
+
 test('redact removes denied terms regardless of case', () => {
   const scrubbed = redact('Reviewed with Jane Doe at AcmeCorp', ['jane doe', 'AcmeCorp'])
 
@@ -175,6 +201,37 @@ test('composeBlock drops a whole bullet that mentions a denied term', () => {
   assert.match(block, /Chose PostgreSQL/)
   assert.doesNotMatch(block, /Vivarium/i)
   assert.doesNotMatch(block, /parser/)
+})
+
+test('composeBlock drops a denied bullet instead of masking the term', () => {
+  const text =
+    '- Chose PostgreSQL over MongoDB for relational integrity\n' +
+    '- Set the LICENSE name field to Jane Doe while wiring the parser'
+
+  const block = composeBlock(
+    [entry({ text })],
+    { project: 'demo', windowDays: 14, generatedAt: '2026-08-01' },
+    { vocabulary: VOCABULARY, deniedTerms: ['Jane Doe'] },
+  )
+
+  assert.match(block, /Chose PostgreSQL/)
+  assert.doesNotMatch(block, /LICENSE name field/)
+  assert.doesNotMatch(block, /redacted/)
+})
+
+test('composeBlock skips bullets that are only a link', () => {
+  const text =
+    '- [pieces-to-agents - npm](https://www.npmjs.com/package/pieces-to-agents)\n' +
+    '- Rewrote the parser to cut allocations'
+
+  const block = composeBlock(
+    [entry({ text })],
+    { project: 'demo', windowDays: 14, generatedAt: '2026-08-01' },
+    { vocabulary: VOCABULARY, deniedTerms: [] },
+  )
+
+  assert.match(block, /Rewrote the parser/)
+  assert.doesNotMatch(block, /npmjs\.com/)
 })
 
 test('composeBlock output round-trips through spliceManagedBlock', () => {
