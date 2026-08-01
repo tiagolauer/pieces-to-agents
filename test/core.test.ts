@@ -2,7 +2,7 @@ import assert from 'node:assert/strict'
 import { test } from 'node:test'
 import { composeBlock, spliceManagedBlock } from '../src/agents-file.ts'
 import { MARKER_END, MARKER_START, MemoryCategory, SyncFailure } from '../src/core.ts'
-import { mentionsProject, type MemoryEntry } from '../src/memory.ts'
+import { isAboutProject, type MemoryEntry } from '../src/memory.ts'
 import { redact } from '../src/redact.ts'
 
 const entry = (overrides: Partial<MemoryEntry> = {}): MemoryEntry => ({
@@ -85,15 +85,29 @@ test('composeBlock skips entries that carry no bullet content', () => {
   assert.doesNotMatch(block, /Architecture decisions/)
 })
 
-test('mentionsProject keeps memories that name the project or an alias', () => {
-  assert.equal(mentionsProject('Refactored the Pieces-To-Agents CLI', ['pieces-to-agents']), true)
-  assert.equal(mentionsProject('Debugged the ptha extractor', ['pieces-to-agents', 'ptha']), true)
+test('isAboutProject keeps sessions whose title names the project or an alias', () => {
+  assert.equal(isAboutProject('Refactored the Pieces-To-Agents CLI', ['pieces-to-agents']), true)
+  assert.equal(isAboutProject('Debugged the ptha extractor', ['pieces-to-agents', 'ptha']), true)
 })
 
-test('mentionsProject rejects memories from unrelated work', () => {
-  const unrelated = 'Approved a pull request on an unrelated billing service and updated my resume'
+test('isAboutProject rejects sessions titled after other work', () => {
+  assert.equal(isAboutProject('Senior C# Prep and Architecture', ['pieces-to-agents']), false)
+})
 
-  assert.equal(mentionsProject(unrelated, ['pieces-to-agents']), false)
+test('isAboutProject matches across accents, spacing and separators', () => {
+  assert.equal(isAboutProject('Marcô Agenda Rebrand and Refactor', ['marco-agenda']), true)
+  assert.equal(isAboutProject('Marco Agenda Rebrand', ['marco_agenda']), true)
+  assert.equal(isAboutProject('OwlSQL Audit', ['owl sql']), true)
+})
+
+test('isAboutProject ignores a passing mention in the session body', () => {
+  const title = 'KangoOS PR and Contract Negotiation'
+  const body =
+    'Reviewed the Vercel project list including marco-agenda, dori-finance and the portfolio. ' +
+    'Negotiated contract terms with a recruiter and set up 2FA recovery codes.'
+
+  assert.equal(isAboutProject(title, ['marco-agenda']), false)
+  assert.equal(isAboutProject(`${title}\n${body}`, ['marco-agenda']), true)
 })
 
 test('composeBlock output round-trips through spliceManagedBlock', () => {

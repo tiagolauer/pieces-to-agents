@@ -29,9 +29,20 @@ export type CollectOptions = {
   readonly deniedTerms: ReadonlyArray<string>
 }
 
-export const mentionsProject = (haystack: string, terms: ReadonlyArray<string>): boolean => {
-  const normalized = haystack.toLowerCase()
-  return terms.some((term) => normalized.includes(term))
+const foldForMatching = (value: string): string =>
+  value
+    .toLowerCase()
+    .normalize('NFD')
+    .replace(/[̀-ͯ]/g, '')
+    .replace(/[^a-z0-9]/g, '')
+
+export const isAboutProject = (sessionTitle: string, terms: ReadonlyArray<string>): boolean => {
+  const folded = foldForMatching(sessionTitle)
+
+  return terms.some((term) => {
+    const foldedTerm = foldForMatching(term)
+    return foldedTerm.length > 0 && folded.includes(foldedTerm)
+  })
 }
 
 type ScoredCategory = { readonly category: MemoryCategory; readonly score: number }
@@ -201,7 +212,7 @@ export const collectMemories = async (
     .filter((term) => term.length > 0)
 
   const entries = [...bodyBySummaryId.values()]
-    .filter((body) => mentionsProject(`${body.title}\n${body.text}`, projectTerms))
+    .filter((body) => isAboutProject(body.title, projectTerms))
     .map(
       (body): MemoryEntry => ({
         category: body.category,

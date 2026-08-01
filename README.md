@@ -125,8 +125,11 @@ Four things stand between your memory and the file:
    it has no bypass flag.
 2. The personal profile PiecesOS keeps about you, stored as `HIERARCHICAL_PROFILE_SUMMARY`, is
    never read. The tool only reads session summaries and descriptions.
-3. A memory has to mention your project name or an alias to be eligible. Work on other projects
-   is dropped before it reaches the diff.
+3. A session's own title has to name your project or an alias before any of it is eligible.
+   Matching ignores accents, spacing and separators, so `marco-agenda` finds a session titled
+   "Marcô Agenda". The title is used rather than the body on purpose: sessions mention other
+   projects in passing all the time, and one stray mention used to drag an entire unrelated
+   work session into the file.
 4. Emails, JWTs, GitHub and Slack tokens and AWS keys are replaced automatically. Names,
    employers and client codenames go in `.pieces-to-agents-ignore`, one per line, and get
    stripped too.
@@ -173,8 +176,10 @@ not notice. A vector-only client will.
 The `created` filter on vector search returns nothing at all. The same query gives five results
 without it and zero with it, so the time window is applied on this side after fetching.
 
-Project matching is a plain substring test. If your work never writes the project name down,
-nothing matches, and `--alias` is the way out.
+Project matching reads the session title only. Pieces names sessions after what you worked on,
+so this is usually the strongest signal available, but a session with a vague title is dropped
+even when its content belongs to your project. `--alias` is the way out, and it takes any name
+the session might be titled after.
 
 ## Development
 
