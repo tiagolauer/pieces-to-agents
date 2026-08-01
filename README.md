@@ -9,6 +9,7 @@ This CLI reads your memory over MCP and writes the parts that belong to a reposi
 context file, so the next agent already knows why the code looks the way it does.
 
 [![CI](https://github.com/tiagolauer/pieces-to-agents/actions/workflows/ci.yml/badge.svg)](https://github.com/tiagolauer/pieces-to-agents/actions/workflows/ci.yml)
+[![npm](https://img.shields.io/npm/v/pieces-to-agents.svg)](https://www.npmjs.com/package/pieces-to-agents)
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 [![Node](https://img.shields.io/badge/node-%E2%89%A5%2020.11-brightgreen.svg)](https://nodejs.org)
 [![Requires PiecesOS](https://img.shields.io/badge/requires-PiecesOS-orange.svg)](https://pieces.app/)
@@ -61,18 +62,19 @@ This tool moves one into the other.
 
 ## Getting started
 
+Run it inside any git repository. There is nothing to install first.
+
 ```bash
-npm install
-npm run sync
+npx pieces-to-agents
 ```
 
 The run prints a diff of what it wants to add. Read it, then answer `y` to write the file or
-anything else to walk away.
+anything else to walk away. Nothing is written until you say so.
 
 ## Options
 
 ```bash
-npm run sync -- --days 30 --target CLAUDE.md --alias ptha --alias "my product"
+npx pieces-to-agents --days 30 --target CLAUDE.md --alias ptha --alias "my product"
 ```
 
 | Flag | Default | Purpose |
@@ -177,9 +179,14 @@ nothing matches, and `--alias` is the way out.
 ## Development
 
 ```bash
+git clone https://github.com/tiagolauer/pieces-to-agents.git
+cd pieces-to-agents
+npm install
 npm run typecheck
 npm test
 ```
+
+`npm run sync` runs the CLI from source without building.
 
 Ten tests cover the parts that would fail quietly: splicing the managed block, redaction, the
 project filter and composing the output.
