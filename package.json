@@ -1,0 +1,31 @@
+{
+  "name": "pieces-to-agents",
+  "version": "0.1.0",
+  "description": "Turn your Pieces Long-Term Memory into an AGENTS.md your coding agents can read.",
+  "license": "MIT",
+  "type": "module",
+  "engines": {
+    "node": ">=20.11"
+  },
+  "scripts": {
+    "sync": "tsx src/cli.ts",
+    "typecheck": "tsc --noEmit",
+    "test": "node --import tsx --test \"test/**/*.test.ts\""
+  },
+  "keywords": [
+    "pieces",
+    "mcp",
+    "long-term-memory",
+    "agents-md",
+    "ai-agents",
+    "developer-tools"
+  ],
+  "dependencies": {
+    "diff": "^8.0.2"
+  },
+  "devDependencies": {
+    "@types/node": "^22.15.3",
+    "tsx": "^4.20.3",
+    "typescript": "^5.8.3"
+  }
+}

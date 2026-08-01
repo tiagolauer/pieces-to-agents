@@ -1,0 +1,12 @@
+# Terms stripped from generated memory before it reaches AGENTS.md.
+# One per line, case-insensitive, matched as literal substrings.
+# Copy this file to .pieces-to-agents-ignore (git-ignored) and fill it in.
+
+# Your own name and the names of colleagues
+# Jane Doe
+
+# Employer and client names
+# AcmeCorp
+
+# Internal codebases and product codenames that must not leak
+# project-atlas

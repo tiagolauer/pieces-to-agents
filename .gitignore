@@ -1,0 +1,9 @@
+node_modules/
+dist/
+*.pieces-tmp
+.pieces-to-agents-ignore
+.DS_Store
+
+# Internal planning notes — never publish
+ARCHITECTURE.md
+PITCH.md
