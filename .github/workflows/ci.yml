@@ -25,6 +25,15 @@ jobs:
 
       - run: npm ci
 
+      - name: Reject byte order marks
+        run: |
+          found=$(git ls-files -z | xargs -0 grep -lI $'\xEF\xBB\xBF' 2>/dev/null || true)
+          if [ -n "$found" ]; then
+            echo "Files start with a UTF-8 BOM, which breaks JSON and module parsing:"
+            echo "$found"
+            exit 1
+          fi
+
       - run: npm run typecheck
 
       - run: npm test
