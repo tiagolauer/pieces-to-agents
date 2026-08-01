@@ -17,6 +17,7 @@ import { McpClient } from './mcp.ts'
 import { collectMemories } from './memory.ts'
 import { composeBlock, readTarget, spliceManagedBlock, writeTarget } from './agents-file.ts'
 import { DENY_LIST_FILENAME, loadDenyList } from './redact.ts'
+import { collectProjectVocabulary } from './vocabulary.ts'
 
 const RESET = '[0m'
 const RED = '[31m'
@@ -136,11 +137,22 @@ const run = async (): Promise<Result<string, SyncFailure>> => {
   })
   if (!memories.ok) return memories
 
-  const block = composeBlock(memories.value, {
+  const vocabulary = await collectProjectVocabulary(repositoryRoot.value, [
     project,
-    windowDays,
-    generatedAt: new Date().toISOString().slice(0, 10),
-  })
+    ...(values.alias ?? []),
+  ])
+
+  const block = composeBlock(
+    memories.value,
+    {
+      project,
+      windowDays,
+      generatedAt: new Date().toISOString().slice(0, 10),
+    },
+    { vocabulary, deniedTerms },
+  )
+
+  if (!block.includes('### ')) return err(SyncFailure.NoProjectMatch)
 
   const existing = await readTarget(targetPath)
   if (!existing.ok) return existing

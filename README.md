@@ -119,7 +119,7 @@ standing in. That includes your employer's internal code, other people's names, 
 AI-written profile of you. Putting any of it in a file you commit is a leak, so the tool assumes
 the worst by default.
 
-Four things stand between your memory and the file:
+Five things stand between your memory and the file:
 
 1. Nothing is written until you approve a diff. This is the control that actually matters, and
    it has no bypass flag.
@@ -130,13 +130,22 @@ Four things stand between your memory and the file:
    "Marcô Agenda". The title is used rather than the body on purpose: sessions mention other
    projects in passing all the time, and one stray mention used to drag an entire unrelated
    work session into the file.
-4. Emails, JWTs, GitHub and Slack tokens and AWS keys are replaced automatically. Names,
-   employers and client codenames go in `.pieces-to-agents-ignore`, one per line, and get
-   stripped too.
+4. Each bullet has to touch the project's own vocabulary, built from your file and folder
+   names, your `package.json` and the aliases you passed. A real session titled "OwlSQL
+   Refactoring and Job Search" carries bullets about both, and only the ones anchored to the
+   repository survive. Anything Pieces tagged with an identified person is dropped outright.
+5. Emails, JWTs, GitHub and Slack tokens and AWS keys are replaced automatically. Names,
+   employers and client codenames go in `.pieces-to-agents-ignore`, one per line. A bullet that
+   mentions one of those terms is removed entirely rather than masked, because the sentence
+   around a name is usually about that name.
 
 Copy `.pieces-to-agents-ignore.example` to get started. The file is git-ignored.
 
-None of this can catch a name it was never told about, which is why the diff exists. Read it.
+None of this is airtight. On a real repository with four months of history, these filters took
+off-topic bullets from twenty percent of the output down to under four, and the survivors were
+mentions of a neighbouring project that shared the same work sessions. Adding that project's name
+to the deny-list removed them. Treat the filters as something that makes the diff short enough to
+actually read, not as a reason to skip reading it.
 
 ## Writing memories on purpose
 

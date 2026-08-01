@@ -4,6 +4,15 @@ import { composeBlock, spliceManagedBlock } from '../src/agents-file.ts'
 import { MARKER_END, MARKER_START, MemoryCategory, SyncFailure } from '../src/core.ts'
 import { isAboutProject, type MemoryEntry } from '../src/memory.ts'
 import { redact } from '../src/redact.ts'
+import { isAnchoredToProject } from '../src/vocabulary.ts'
+
+const VOCABULARY: ReadonlySet<string> = new Set([
+  'demo',
+  'postgresql',
+  'mongodb',
+  'graphql',
+  'parser',
+])
 
 const entry = (overrides: Partial<MemoryEntry> = {}): MemoryEntry => ({
   category: MemoryCategory.ArchitectureDecisions,
@@ -62,11 +71,11 @@ test('redact removes denied terms regardless of case', () => {
 })
 
 test('composeBlock emits bullets under the category heading', () => {
-  const block = composeBlock([entry()], {
-    project: 'demo',
-    windowDays: 14,
-    generatedAt: '2026-08-01',
-  })
+  const block = composeBlock(
+    [entry()],
+    { project: 'demo', windowDays: 14, generatedAt: '2026-08-01' },
+    { vocabulary: VOCABULARY, deniedTerms: [] },
+  )
 
   assert.match(block, /^<!-- pieces-to-agents:start -->/)
   assert.match(block, /Architecture decisions/)
@@ -76,11 +85,11 @@ test('composeBlock emits bullets under the category heading', () => {
 })
 
 test('composeBlock skips entries that carry no bullet content', () => {
-  const block = composeBlock([entry({ text: 'Prose only, no bullet list here.' })], {
-    project: 'demo',
-    windowDays: 14,
-    generatedAt: '2026-08-01',
-  })
+  const block = composeBlock(
+    [entry({ text: 'Prose only, no bullet list here.' })],
+    { project: 'demo', windowDays: 14, generatedAt: '2026-08-01' },
+    { vocabulary: VOCABULARY, deniedTerms: [] },
+  )
 
   assert.doesNotMatch(block, /Architecture decisions/)
 })
@@ -110,12 +119,70 @@ test('isAboutProject ignores a passing mention in the session body', () => {
   assert.equal(isAboutProject(`${title}\n${body}`, ['marco-agenda']), true)
 })
 
+test('isAnchoredToProject keeps bullets that touch the project vocabulary', () => {
+  assert.equal(isAnchoredToProject('Rewrote the parser to cut allocations', VOCABULARY), true)
+  assert.equal(isAnchoredToProject('Chose PostgreSQL over MongoDB', VOCABULARY), true)
+})
+
+test('isAnchoredToProject drops any bullet that references an identified person', () => {
+  const bullet =
+    'Collaborated with [Jean Doe](pieces://persons/4fe4f1f6) on the parser and PostgreSQL schema'
+
+  assert.equal(isAnchoredToProject(bullet, VOCABULARY), false)
+})
+
+test('isAnchoredToProject ignores generic folder names as anchors', () => {
+  const vocabulary: ReadonlySet<string> = new Set(['owlsql'])
+  const bullet = 'Drafted a support email about an SSL error on a client src config'
+
+  assert.equal(isAnchoredToProject(bullet, vocabulary), false)
+})
+
+test('isAnchoredToProject drops bullets from a mixed session', () => {
+  const offTopic = [
+    'Browsed and reviewed job listings on a jobs board',
+    'Coordinated repo updates with a colleague over WhatsApp',
+    'Engaged in extended DayZ gameplay on server 188.255.171.159:2302',
+    'Drafted a support email about an SSL error on a client domain',
+  ]
+
+  for (const bullet of offTopic) {
+    assert.equal(isAnchoredToProject(bullet, VOCABULARY), false, bullet)
+  }
+})
+
+test('composeBlock drops an entry once its bullets are all off topic', () => {
+  const block = composeBlock(
+    [entry({ text: '- Played DayZ all evening\n- Reviewed job listings' })],
+    { project: 'demo', windowDays: 14, generatedAt: '2026-08-01' },
+    { vocabulary: VOCABULARY, deniedTerms: [] },
+  )
+
+  assert.doesNotMatch(block, /Architecture decisions/)
+})
+
+test('composeBlock drops a whole bullet that mentions a denied term', () => {
+  const text =
+    '- Chose PostgreSQL over MongoDB for relational integrity\n' +
+    '- Reviewed the Vivarium audit while working on the parser'
+
+  const block = composeBlock(
+    [entry({ text })],
+    { project: 'demo', windowDays: 14, generatedAt: '2026-08-01' },
+    { vocabulary: VOCABULARY, deniedTerms: ['vivarium'] },
+  )
+
+  assert.match(block, /Chose PostgreSQL/)
+  assert.doesNotMatch(block, /Vivarium/i)
+  assert.doesNotMatch(block, /parser/)
+})
+
 test('composeBlock output round-trips through spliceManagedBlock', () => {
-  const block = composeBlock([entry()], {
-    project: 'demo',
-    windowDays: 14,
-    generatedAt: '2026-08-01',
-  })
+  const block = composeBlock(
+    [entry()],
+    { project: 'demo', windowDays: 14, generatedAt: '2026-08-01' },
+    { vocabulary: VOCABULARY, deniedTerms: [] },
+  )
 
   const first = spliceManagedBlock('# Repo\n\nKeep me.\n', block)
   assert.equal(first.ok, true)

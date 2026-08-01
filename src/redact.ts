@@ -13,6 +13,8 @@ const SECRET_PATTERNS: ReadonlyArray<readonly [RegExp, string]> = [
   [/\bAKIA[0-9A-Z]{16}\b/g, '[aws-key]'],
   [/\b(?:sk|pk|rk)[-_](?:live|test|proj)?[-_]?[A-Za-z0-9]{20,}/gi, '[api-key]'],
   [/\b[A-Za-z][A-Za-z0-9+.-]*:\/\/[^\s/@:]+:[^\s/@]+@\S+/g, '[url-with-credentials]'],
+  [/\(pieces:\/\/[^)\s]+\)/gi, ''],
+  [/pieces:\/\/\S+/gi, ''],
 ]
 
 const escapeForRegex = (term: string): string => term.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')

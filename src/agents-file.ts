@@ -10,6 +10,7 @@ import {
   type Result,
 } from './core.ts'
 import type { MemoryEntry } from './memory.ts'
+import { isAnchoredToProject } from './vocabulary.ts'
 
 const MAX_BULLETS_PER_ENTRY = 6
 const MAX_BULLET_LENGTH = 280
@@ -22,9 +23,22 @@ export type BlockMetadata = {
   readonly generatedAt: string
 }
 
+export type BulletFilters = {
+  readonly vocabulary: ReadonlySet<string>
+  readonly deniedTerms: ReadonlyArray<string>
+}
+
+const mentionsDeniedTerm = (bullet: string, deniedTerms: ReadonlyArray<string>): boolean => {
+  const lowered = bullet.toLowerCase()
+  return deniedTerms.some((term) => {
+    const trimmed = term.trim().toLowerCase()
+    return trimmed.length > 0 && lowered.includes(trimmed)
+  })
+}
+
 const stripMarkdownEmphasis = (line: string): string => line.replace(/\*\*/g, '').trim()
 
-const extractBullets = (text: string): ReadonlyArray<string> => {
+const extractBullets = (text: string, filters: BulletFilters): ReadonlyArray<string> => {
   const bullets: string[] = []
 
   for (const line of text.split(/\r?\n/)) {
@@ -33,6 +47,8 @@ const extractBullets = (text: string): ReadonlyArray<string> => {
 
     const content = stripMarkdownEmphasis(match[1] ?? '')
     if (content.length === 0) continue
+    if (mentionsDeniedTerm(content, filters.deniedTerms)) continue
+    if (!isAnchoredToProject(content, filters.vocabulary)) continue
 
     bullets.push(content.length > MAX_BULLET_LENGTH ? `${content.slice(0, MAX_BULLET_LENGTH)}…` : content)
     if (bullets.length === MAX_BULLETS_PER_ENTRY) break
@@ -41,8 +57,8 @@ const extractBullets = (text: string): ReadonlyArray<string> => {
   return bullets
 }
 
-const renderEntry = (entry: MemoryEntry): string | null => {
-  const bullets = extractBullets(entry.text)
+const renderEntry = (entry: MemoryEntry, filters: BulletFilters): string | null => {
+  const bullets = extractBullets(entry.text, filters)
   if (bullets.length === 0) return null
 
   const day = entry.createdAt.slice(0, 10)
@@ -53,6 +69,7 @@ const renderEntry = (entry: MemoryEntry): string | null => {
 export const composeBlock = (
   entries: ReadonlyArray<MemoryEntry>,
   metadata: BlockMetadata,
+  filters: BulletFilters,
 ): string => {
   const sections: string[] = [
     MARKER_START,
@@ -67,7 +84,7 @@ export const composeBlock = (
     const rendered = entries
       .filter((entry) => entry.category === category)
       .slice(0, MAX_ENTRIES_PER_CATEGORY)
-      .map(renderEntry)
+      .map((entry) => renderEntry(entry, filters))
       .filter((block): block is string => block !== null)
 
     if (rendered.length === 0) continue
