@@ -1,7 +1,14 @@
 import assert from 'node:assert/strict'
 import { test } from 'node:test'
 import { composeBlock, spliceManagedBlock } from '../src/agents-file.ts'
-import { MARKER_END, MARKER_START, MemoryCategory, SyncFailure } from '../src/core.ts'
+import {
+  MARKER_END,
+  MARKER_START,
+  MemoryCategory,
+  SyncFailure,
+  TargetFile,
+  resolveTargetFile,
+} from '../src/core.ts'
 import { isAboutProject, type MemoryEntry } from '../src/memory.ts'
 import { redact } from '../src/redact.ts'
 import { isAnchoredToProject } from '../src/vocabulary.ts'
@@ -217,6 +224,20 @@ test('composeBlock drops a denied bullet instead of masking the term', () => {
   assert.match(block, /Chose PostgreSQL/)
   assert.doesNotMatch(block, /LICENSE name field/)
   assert.doesNotMatch(block, /redacted/)
+})
+
+test('resolveTargetFile accepts either file, with or without case and extension', () => {
+  assert.equal(resolveTargetFile('CLAUDE.md'), TargetFile.Claude)
+  assert.equal(resolveTargetFile('claude.md'), TargetFile.Claude)
+  assert.equal(resolveTargetFile('claude'), TargetFile.Claude)
+  assert.equal(resolveTargetFile('AGENTS.md'), TargetFile.Agents)
+  assert.equal(resolveTargetFile(' agents '), TargetFile.Agents)
+})
+
+test('resolveTargetFile rejects anything else instead of falling back silently', () => {
+  assert.equal(resolveTargetFile('README.md'), null)
+  assert.equal(resolveTargetFile('CLAUDE.txt'), null)
+  assert.equal(resolveTargetFile(''), null)
 })
 
 test('composeBlock redacts denied terms in the session title', () => {

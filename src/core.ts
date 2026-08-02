@@ -24,6 +24,14 @@ export enum TargetFile {
   Claude = 'CLAUDE.md',
 }
 
+export const resolveTargetFile = (requested: string): TargetFile | null => {
+  const normalized = requested.trim().toLowerCase().replace(/\.md$/, '')
+
+  if (normalized === 'agents') return TargetFile.Agents
+  if (normalized === 'claude') return TargetFile.Claude
+  return null
+}
+
 export enum SyncFailure {
   NotAGitRepository = 'not-a-git-repository',
   PiecesOsUnreachable = 'pieces-os-unreachable',
@@ -31,6 +39,7 @@ export enum SyncFailure {
   McpCallFailed = 'mcp-call-failed',
   NoMemoriesInWindow = 'no-memories-in-window',
   NoProjectMatch = 'no-project-match',
+  UnknownTarget = 'unknown-target',
   ManagedBlockConflict = 'managed-block-conflict',
   ReadFailed = 'read-failed',
   WriteFailed = 'write-failed',
@@ -72,7 +81,7 @@ export const FULL_TEXT_SCORE = 1
 export const MCP_ENDPOINT = 'http://localhost:39300/model_context_protocol/2025-03-26/mcp'
 export const MCP_PROTOCOL_VERSION = '2025-03-26'
 export const CLIENT_NAME = 'pieces-to-agents'
-export const CLIENT_VERSION = '0.1.5'
+export const CLIENT_VERSION = '0.1.6'
 
 export const MARKER_START = '<!-- pieces-to-agents:start -->'
 export const MARKER_END = '<!-- pieces-to-agents:end -->'

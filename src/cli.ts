@@ -11,6 +11,7 @@ import {
   TargetFile,
   err,
   ok,
+  resolveTargetFile,
   type Result,
 } from './core.ts'
 import { McpClient } from './mcp.ts'
@@ -37,6 +38,7 @@ const FAILURE_MESSAGES: Readonly<Record<SyncFailure, string>> = {
     'No memories found in the selected window. Try a longer window with --days.',
   [SyncFailure.NoProjectMatch]:
     'Memories were found, but none mention this project. Pass --alias with a name that appears in your work, or use --project.',
+  [SyncFailure.UnknownTarget]: 'Unknown --target. Use AGENTS.md or CLAUDE.md.',
   [SyncFailure.ManagedBlockConflict]:
     'The target file has a malformed pieces-to-agents block. Fix the start/end markers manually.',
   [SyncFailure.ReadFailed]: 'Could not read the target file.',
@@ -51,6 +53,7 @@ const EXIT_CODES: Readonly<Record<SyncFailure, number>> = {
   [SyncFailure.McpCallFailed]: 5,
   [SyncFailure.NoMemoriesInWindow]: 6,
   [SyncFailure.NoProjectMatch]: 6,
+  [SyncFailure.UnknownTarget]: 10,
   [SyncFailure.ManagedBlockConflict]: 7,
   [SyncFailure.ReadFailed]: 8,
   [SyncFailure.WriteFailed]: 9,
@@ -113,7 +116,9 @@ const run = async (): Promise<Result<string, SyncFailure>> => {
   const parsedDays = Number.parseInt(values.days ?? '', 10)
   const windowDays = Number.isFinite(parsedDays) && parsedDays > 0 ? parsedDays : DEFAULT_WINDOW_DAYS
   const project = values.project ?? basename(repositoryRoot.value)
-  const targetName = values.target === TargetFile.Claude ? TargetFile.Claude : TargetFile.Agents
+  const targetName = resolveTargetFile(values.target ?? TargetFile.Agents)
+  if (targetName === null) return err(SyncFailure.UnknownTarget)
+
   const targetPath = join(repositoryRoot.value, targetName)
 
   process.stdout.write(
