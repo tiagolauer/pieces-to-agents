@@ -219,6 +219,17 @@ test('composeBlock drops a denied bullet instead of masking the term', () => {
   assert.doesNotMatch(block, /redacted/)
 })
 
+test('composeBlock redacts denied terms in the session title', () => {
+  const block = composeBlock(
+    [entry({ title: 'Demo Refactor and AcmeCorp Troubleshooting' })],
+    { project: 'demo', windowDays: 14, generatedAt: '2026-08-01' },
+    { vocabulary: VOCABULARY, deniedTerms: ['AcmeCorp'] },
+  )
+
+  assert.doesNotMatch(block, /AcmeCorp/i)
+  assert.match(block, /Demo Refactor/)
+})
+
 test('composeBlock skips bullets that are only a link', () => {
   const text =
     '- [pieces-to-agents - npm](https://www.npmjs.com/package/pieces-to-agents)\n' +

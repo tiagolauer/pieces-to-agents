@@ -68,7 +68,8 @@ const renderEntry = (entry: MemoryEntry, filters: BulletFilters): string | null 
   if (bullets.length === 0) return null
 
   const day = entry.createdAt.slice(0, 10)
-  const lines = [`**${entry.title}** — ${day}`, '', ...bullets.map((bullet) => `- ${bullet}`)]
+  const title = redact(entry.title, filters.deniedTerms).replace(/\s{2,}/g, ' ').trim()
+  const lines = [`**${title}** — ${day}`, '', ...bullets.map((bullet) => `- ${bullet}`)]
   return lines.join('\n')
 }
 
