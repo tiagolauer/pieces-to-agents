@@ -377,6 +377,19 @@ test('composeBlock skips bullets that are only a link', () => {
   assert.doesNotMatch(block, /npmjs\.com/)
 })
 
+test('composeBlock applies the entry cap after rendering, not before', () => {
+  const empty = entry({ text: 'Prose only, nothing to keep.' })
+  const rich = entry({ text: '- Chose PostgreSQL over MongoDB for relational integrity' })
+
+  const block = composeBlock(
+    [empty, empty, empty, empty, rich],
+    { project: 'demo', windowDays: 14, generatedAt: '2026-08-01' },
+    { vocabulary: VOCABULARY, deniedTerms: [] },
+  )
+
+  assert.match(block, /Chose PostgreSQL/)
+})
+
 test('composeBlock output round-trips through spliceManagedBlock', () => {
   const block = composeBlock(
     [entry()],
