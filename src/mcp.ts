@@ -21,6 +21,23 @@ const isRecord = (value: unknown): value is Record<string, unknown> =>
 const isTimeout = (caught: unknown): boolean =>
   isRecord(caught) && (caught.name === 'TimeoutError' || caught.name === 'AbortError')
 
+export const parseEventStreamMessage = (raw: string): unknown => {
+  for (const event of raw.split(/\r?\n\r?\n/)) {
+    const dataLines = event
+      .split(/\r?\n/)
+      .filter((line) => line.startsWith('data:'))
+      .map((line) => line.replace(/^data:\s?/, ''))
+    if (dataLines.length === 0) continue
+
+    try {
+      return JSON.parse(dataLines.join('\n'))
+    } catch {
+      continue
+    }
+  }
+  return null
+}
+
 export class McpClient {
   private sessionId: string | null = null
 
@@ -105,7 +122,8 @@ export class McpClient {
     try {
       parsed = JSON.parse(raw)
     } catch {
-      return err(SyncFailure.McpCallFailed)
+      parsed = parseEventStreamMessage(raw)
+      if (parsed === null) return err(SyncFailure.McpCallFailed)
     }
 
     if (!isRecord(parsed)) return err(SyncFailure.McpCallFailed)
