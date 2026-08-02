@@ -26,6 +26,19 @@ const GREEN = '[32m'
 const DIM = '[2m'
 const BOLD = '[1m'
 
+const USAGE = `Usage: pieces-to-agents [options]
+
+Turns Pieces Long-Term Memory into a project context file. Shows a diff and
+asks before writing anything.
+
+Options:
+  --days <n>        How far back to look, in days (default: ${DEFAULT_WINDOW_DAYS})
+  --target <file>   AGENTS.md or CLAUDE.md (default: AGENTS.md)
+  --project <name>  Term used to match memories to this project (default: repository folder name)
+  --alias <name>    Another name this project goes by; repeat for more than one
+  -h, --help        Show this help
+`
+
 const FAILURE_MESSAGES: Readonly<Record<SyncFailure, string>> = {
   [SyncFailure.NotAGitRepository]:
     'No git repository found from the current directory upward. Run this inside a repository.',
@@ -42,6 +55,7 @@ const FAILURE_MESSAGES: Readonly<Record<SyncFailure, string>> = {
   [SyncFailure.NoProjectMatch]:
     'Memories were found, but none mention this project. Pass --alias with a name that appears in your work, or use --project.',
   [SyncFailure.UnknownTarget]: 'Unknown --target. Use AGENTS.md or CLAUDE.md.',
+  [SyncFailure.UnknownOption]: 'Unknown option. Run pieces-to-agents --help to see the options.',
   [SyncFailure.ManagedBlockConflict]:
     'The target file has a malformed pieces-to-agents block. Fix the start/end markers manually.',
   [SyncFailure.ReadFailed]: 'Could not read the target file.',
@@ -58,6 +72,7 @@ const EXIT_CODES: Readonly<Record<SyncFailure, number>> = {
   [SyncFailure.NoMemoriesInWindow]: 6,
   [SyncFailure.NoProjectMatch]: 6,
   [SyncFailure.UnknownTarget]: 10,
+  [SyncFailure.UnknownOption]: 12,
   [SyncFailure.ManagedBlockConflict]: 7,
   [SyncFailure.ReadFailed]: 8,
   [SyncFailure.WriteFailed]: 9,
@@ -96,23 +111,44 @@ const printDiff = (before: string, after: string): void => {
 const confirm = async (question: string): Promise<boolean> => {
   const rl = createInterface({ input: process.stdin, output: process.stdout })
   try {
-    const answer = await rl.question(question)
+    const closedWithoutAnswer = new Promise<string>((resolveClosed) => {
+      rl.once('close', () => resolveClosed(''))
+    })
+    const answer = await Promise.race([rl.question(question), closedWithoutAnswer])
     return answer.trim().toLowerCase() === 'y'
   } finally {
     rl.close()
   }
 }
 
+const parseCliValues = () => {
+  try {
+    return ok(
+      parseArgs({
+        options: {
+          target: { type: 'string', default: TargetFile.Agents },
+          days: { type: 'string', default: String(DEFAULT_WINDOW_DAYS) },
+          project: { type: 'string' },
+          alias: { type: 'string', multiple: true, default: [] },
+          help: { type: 'boolean', short: 'h', default: false },
+        },
+        allowPositionals: true,
+      }).values,
+    )
+  } catch {
+    return err(SyncFailure.UnknownOption)
+  }
+}
+
 const run = async (): Promise<Result<string, SyncFailure>> => {
-  const { values } = parseArgs({
-    options: {
-      target: { type: 'string', default: TargetFile.Agents },
-      days: { type: 'string', default: String(DEFAULT_WINDOW_DAYS) },
-      project: { type: 'string' },
-      alias: { type: 'string', multiple: true, default: [] },
-    },
-    allowPositionals: true,
-  })
+  const parsed = parseCliValues()
+  if (!parsed.ok) return parsed
+  const values = parsed.value
+
+  if (values.help) {
+    process.stdout.write(USAGE)
+    return ok('')
+  }
 
   const repositoryRoot = await findRepositoryRoot(process.cwd())
   if (!repositoryRoot.ok) return repositoryRoot
@@ -192,7 +228,7 @@ const run = async (): Promise<Result<string, SyncFailure>> => {
 const outcome = await run()
 
 if (outcome.ok) {
-  process.stdout.write(`${GREEN}${outcome.value}${RESET}\n`)
+  if (outcome.value.length > 0) process.stdout.write(`${GREEN}${outcome.value}${RESET}\n`)
 } else {
   process.stdout.write(`\n${RED}${FAILURE_MESSAGES[outcome.error]}${RESET}\n`)
   process.exitCode = EXIT_CODES[outcome.error]

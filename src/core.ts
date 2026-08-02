@@ -1,3 +1,5 @@
+import { readFile } from 'node:fs/promises'
+
 export type Result<T, E> =
   | { readonly ok: true; readonly value: T }
   | { readonly ok: false; readonly error: E }
@@ -41,6 +43,7 @@ export enum SyncFailure {
   NoMemoriesInWindow = 'no-memories-in-window',
   NoProjectMatch = 'no-project-match',
   UnknownTarget = 'unknown-target',
+  UnknownOption = 'unknown-option',
   ManagedBlockConflict = 'managed-block-conflict',
   ReadFailed = 'read-failed',
   WriteFailed = 'write-failed',
@@ -77,12 +80,27 @@ export const CATEGORY_KEYWORDS: Readonly<Record<MemoryCategory, string>> = {
   [MemoryCategory.EnvironmentGotchas]: 'setup',
 }
 
-export const FULL_TEXT_SCORE = 1
+export const FULL_TEXT_SCORE = 0
 
 export const MCP_ENDPOINT = 'http://localhost:39300/model_context_protocol/2025-03-26/mcp'
 export const MCP_PROTOCOL_VERSION = '2025-03-26'
 export const CLIENT_NAME = 'pieces-to-agents'
-export const CLIENT_VERSION = '0.1.11'
+
+const FALLBACK_VERSION = '0.0.0'
+
+const readOwnVersion = async (): Promise<string> => {
+  try {
+    const raw = await readFile(new URL('../package.json', import.meta.url), 'utf8')
+    const manifest: unknown = JSON.parse(raw)
+    if (typeof manifest !== 'object' || manifest === null) return FALLBACK_VERSION
+    const version = (manifest as { version?: unknown }).version
+    return typeof version === 'string' ? version : FALLBACK_VERSION
+  } catch {
+    return FALLBACK_VERSION
+  }
+}
+
+export const CLIENT_VERSION = await readOwnVersion()
 
 export const MARKER_START = '<!-- pieces-to-agents:start -->'
 export const MARKER_END = '<!-- pieces-to-agents:end -->'

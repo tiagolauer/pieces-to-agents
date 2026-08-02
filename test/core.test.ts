@@ -1,7 +1,9 @@
 import assert from 'node:assert/strict'
+import { readFile } from 'node:fs/promises'
 import { test } from 'node:test'
 import { composeBlock, spliceManagedBlock, trimTitleToProject } from '../src/agents-file.ts'
 import {
+  CLIENT_VERSION,
   MARKER_END,
   MARKER_START,
   MemoryCategory,
@@ -268,6 +270,13 @@ test('resolveTargetFile rejects anything else instead of falling back silently',
   assert.equal(resolveTargetFile('README.md'), null)
   assert.equal(resolveTargetFile('CLAUDE.txt'), null)
   assert.equal(resolveTargetFile(''), null)
+})
+
+test('CLIENT_VERSION mirrors the package.json version', async () => {
+  const raw = await readFile(new URL('../package.json', import.meta.url), 'utf8')
+  const manifest = JSON.parse(raw) as { version: string }
+
+  assert.equal(CLIENT_VERSION, manifest.version)
 })
 
 test('composeBlock redacts denied terms in the session title', () => {
