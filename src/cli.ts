@@ -33,7 +33,10 @@ const FAILURE_MESSAGES: Readonly<Record<SyncFailure, string>> = {
     'PiecesOS is not reachable on localhost:39300. Start PiecesOS and try again.',
   [SyncFailure.McpHandshakeFailed]:
     'PiecesOS answered but rejected the MCP handshake. Check that the MCP server is enabled in Pieces settings.',
-  [SyncFailure.McpCallFailed]: 'A call to the Pieces MCP server failed.',
+  [SyncFailure.McpCallFailed]:
+    'A call to the Pieces MCP server failed. The line above says which one. If it repeats, restart PiecesOS.',
+  [SyncFailure.McpTimeout]:
+    'PiecesOS did not answer in 30 seconds. It is usually busy indexing; wait a moment and run again.',
   [SyncFailure.NoMemoriesInWindow]:
     'No memories found in the selected window. Try a longer window with --days.',
   [SyncFailure.NoProjectMatch]:
@@ -51,6 +54,7 @@ const EXIT_CODES: Readonly<Record<SyncFailure, number>> = {
   [SyncFailure.PiecesOsUnreachable]: 3,
   [SyncFailure.McpHandshakeFailed]: 4,
   [SyncFailure.McpCallFailed]: 5,
+  [SyncFailure.McpTimeout]: 11,
   [SyncFailure.NoMemoriesInWindow]: 6,
   [SyncFailure.NoProjectMatch]: 6,
   [SyncFailure.UnknownTarget]: 10,

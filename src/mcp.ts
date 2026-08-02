@@ -18,6 +18,9 @@ type JsonRpcResponse = {
 const isRecord = (value: unknown): value is Record<string, unknown> =>
   typeof value === 'object' && value !== null
 
+const isTimeout = (caught: unknown): boolean =>
+  isRecord(caught) && (caught.name === 'TimeoutError' || caught.name === 'AbortError')
+
 export class McpClient {
   private sessionId: string | null = null
 
@@ -40,10 +43,16 @@ export class McpClient {
 
   async callTool(name: string, args: Record<string, unknown>): Promise<Result<unknown, SyncFailure>> {
     const response = await this.send('tools/call', { name, arguments: args })
-    if (!response.ok) return response
+    if (!response.ok) {
+      process.stderr.write(`  while calling ${name}\n`)
+      return response
+    }
 
     const text = response.value.result?.content?.[0]?.text
-    if (typeof text !== 'string') return err(SyncFailure.McpCallFailed)
+    if (typeof text !== 'string') {
+      process.stderr.write(`  ${name} answered without any content\n`)
+      return err(SyncFailure.McpCallFailed)
+    }
 
     try {
       return ok(JSON.parse(text) as unknown)
@@ -77,11 +86,13 @@ export class McpClient {
         body,
         signal: AbortSignal.timeout(CALL_TIMEOUT_MS),
       })
-    } catch {
-      return err(method === 'initialize' ? SyncFailure.PiecesOsUnreachable : SyncFailure.McpCallFailed)
+    } catch (caught) {
+      if (method === 'initialize') return err(SyncFailure.PiecesOsUnreachable)
+      return err(isTimeout(caught) ? SyncFailure.McpTimeout : SyncFailure.McpCallFailed)
     }
 
     if (!response.ok) {
+      process.stderr.write(`  PiecesOS answered ${response.status} ${response.statusText}\n`)
       return err(method === 'initialize' ? SyncFailure.McpHandshakeFailed : SyncFailure.McpCallFailed)
     }
 

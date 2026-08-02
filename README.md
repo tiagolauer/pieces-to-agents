@@ -200,7 +200,12 @@ npm run typecheck
 npm test
 ```
 
-`npm run sync` runs the CLI from source without building.
+`npm run sync` runs the CLI from source without building. To pass flags, call it through `npx`
+instead, because PowerShell swallows the `--` separator that `npm run` needs:
+
+```bash
+npx tsx src/cli.ts --days 30 --alias "my product"
+```
 
 Ten tests cover the parts that would fail quietly: splicing the managed block, redaction, the
 project filter and composing the output.

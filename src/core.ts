@@ -37,6 +37,7 @@ export enum SyncFailure {
   PiecesOsUnreachable = 'pieces-os-unreachable',
   McpHandshakeFailed = 'mcp-handshake-failed',
   McpCallFailed = 'mcp-call-failed',
+  McpTimeout = 'mcp-timeout',
   NoMemoriesInWindow = 'no-memories-in-window',
   NoProjectMatch = 'no-project-match',
   UnknownTarget = 'unknown-target',
@@ -81,7 +82,7 @@ export const FULL_TEXT_SCORE = 1
 export const MCP_ENDPOINT = 'http://localhost:39300/model_context_protocol/2025-03-26/mcp'
 export const MCP_PROTOCOL_VERSION = '2025-03-26'
 export const CLIENT_NAME = 'pieces-to-agents'
-export const CLIENT_VERSION = '0.1.9'
+export const CLIENT_VERSION = '0.1.10'
 
 export const MARKER_START = '<!-- pieces-to-agents:start -->'
 export const MARKER_END = '<!-- pieces-to-agents:end -->'
