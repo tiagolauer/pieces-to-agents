@@ -158,6 +158,8 @@ const run = async (): Promise<Result<string, SyncFailure>> => {
 
   if (!block.includes('### ')) return err(SyncFailure.NoProjectMatch)
 
+  const renderedCount = (block.match(/^\*\*/gm) ?? []).length
+
   const existing = await readTarget(targetPath)
   if (!existing.ok) return existing
 
@@ -174,13 +176,13 @@ const run = async (): Promise<Result<string, SyncFailure>> => {
   )
   process.stdout.write(`${DIM}Add terms to ${DENY_LIST_FILENAME} to redact them permanently.${RESET}\n\n`)
 
-  const approved = await confirm(`Write ${memories.value.length} memories to ${targetName}? [y/N] `)
+  const approved = await confirm(`Write ${renderedCount} memories to ${targetName}? [y/N] `)
   if (!approved) return err(SyncFailure.Cancelled)
 
   const written = await writeTarget(targetPath, updated.value)
   if (!written.ok) return written
 
-  return ok(`Wrote ${targetName} with ${memories.value.length} memories.`)
+  return ok(`Wrote ${targetName} with ${renderedCount} memories.`)
 }
 
 const outcome = await run()

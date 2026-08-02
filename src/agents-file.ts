@@ -18,6 +18,13 @@ const MAX_BULLET_LENGTH = 280
 const MAX_ENTRIES_PER_CATEGORY = 4
 const BULLET_PATTERN = /^\s*[-*]\s+(.*)$/
 const BARE_LINK_PATTERN = /^\[[^\]]*\]\([^)]*\)[.\s]*$/
+const PLACEHOLDER_ONLY_PATTERN = /^[`\s]*\[(?:redacted|local path|phone|email)\]/i
+const TRAILING_PLACEHOLDER_PATTERN = /\[(?:redacted|local path|phone|email)\]\s*$/i
+
+const PENDING_WORK_PATTERN =
+  /^(?:resolve|address|continue|merge|finalize|prioritize|update|implement|investigate|complete|review|verify|publish|create|add|fix|run|start|prepare|schedule|follow up|send|draft|test|refactor|remove|migrate)\b/i
+
+const TITLE_SEGMENT_SEPARATOR = /\s+and\s+/i
 
 export type BlockMetadata = {
   readonly project: string
@@ -40,6 +47,15 @@ const mentionsDeniedTerm = (bullet: string, deniedTerms: ReadonlyArray<string>):
 
 const stripMarkdownEmphasis = (line: string): string => line.replace(/\*\*/g, '').trim()
 
+export const trimTitleToProject = (rawTitle: string, filters: BulletFilters): string => {
+  const redacted = redact(rawTitle, filters.deniedTerms).replace(/\s{2,}/g, ' ').trim()
+  const segments = redacted.split(TITLE_SEGMENT_SEPARATOR)
+  if (segments.length < 2) return redacted
+
+  const anchored = segments.filter((segment) => isAnchoredToProject(segment, filters.vocabulary))
+  return anchored.length > 0 ? anchored.join(' and ') : redacted
+}
+
 const extractBullets = (text: string, filters: BulletFilters): ReadonlyArray<string> => {
   const bullets: string[] = []
 
@@ -53,8 +69,12 @@ const extractBullets = (text: string, filters: BulletFilters): ReadonlyArray<str
     if (mentionsDeniedTerm(content, filters.deniedTerms)) continue
     if (!isAnchoredToProject(content, filters.vocabulary)) continue
 
+    if (PENDING_WORK_PATTERN.test(content)) continue
+
     const scrubbed = redact(content, filters.deniedTerms).replace(/\s{2,}/g, ' ').trim()
     if (scrubbed.length === 0) continue
+    if (PLACEHOLDER_ONLY_PATTERN.test(scrubbed)) continue
+    if (TRAILING_PLACEHOLDER_PATTERN.test(scrubbed)) continue
 
     bullets.push(scrubbed.length > MAX_BULLET_LENGTH ? `${scrubbed.slice(0, MAX_BULLET_LENGTH)}…` : scrubbed)
     if (bullets.length === MAX_BULLETS_PER_ENTRY) break
@@ -68,7 +88,7 @@ const renderEntry = (entry: MemoryEntry, filters: BulletFilters): string | null 
   if (bullets.length === 0) return null
 
   const day = entry.createdAt.slice(0, 10)
-  const title = redact(entry.title, filters.deniedTerms).replace(/\s{2,}/g, ' ').trim()
+  const title = trimTitleToProject(entry.title, filters)
   const lines = [`**${title}** — ${day}`, '', ...bullets.map((bullet) => `- ${bullet}`)]
   return lines.join('\n')
 }

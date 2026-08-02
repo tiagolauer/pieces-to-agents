@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict'
 import { test } from 'node:test'
-import { composeBlock, spliceManagedBlock } from '../src/agents-file.ts'
+import { composeBlock, spliceManagedBlock, trimTitleToProject } from '../src/agents-file.ts'
 import {
   MARKER_END,
   MARKER_START,
@@ -266,6 +266,54 @@ test('composeBlock redacts denied terms in the session title', () => {
 
   assert.doesNotMatch(block, /AcmeCorp/i)
   assert.match(block, /Demo Refactor/)
+})
+
+test('trimTitleToProject drops the half of a title about other work', () => {
+  const filters = { vocabulary: new Set(['owlsql']), deniedTerms: [] }
+
+  assert.equal(trimTitleToProject('OwlSQL Refactoring and Job Search', filters), 'OwlSQL Refactoring')
+  assert.equal(trimTitleToProject('OwlSQL Audit and Gameplay', filters), 'OwlSQL Audit')
+  assert.equal(trimTitleToProject('OwlSQL Audit and OwlSQL Release', filters), 'OwlSQL Audit and OwlSQL Release')
+})
+
+test('trimTitleToProject keeps the title when no half is anchored', () => {
+  const filters = { vocabulary: new Set(['owlsql']), deniedTerms: [] }
+
+  assert.equal(trimTitleToProject('Planning and Review', filters), 'Planning and Review')
+})
+
+test('composeBlock drops bullets that describe work still to do', () => {
+  const text =
+    '- Chose PostgreSQL over MongoDB for relational integrity\n' +
+    '- Resolve merge conflicts in the demo parser branch\n' +
+    '- Finalize the demo README before release'
+
+  const block = composeBlock(
+    [entry({ text })],
+    { project: 'demo', windowDays: 14, generatedAt: '2026-08-01' },
+    { vocabulary: VOCABULARY, deniedTerms: [] },
+  )
+
+  assert.match(block, /Chose PostgreSQL/)
+  assert.doesNotMatch(block, /merge conflicts/)
+  assert.doesNotMatch(block, /Finalize/)
+})
+
+test('composeBlock drops bullets left as nothing but a placeholder', () => {
+  const text =
+    '- Chose PostgreSQL over MongoDB for relational integrity\n' +
+    '- `F:\\work\\demo\\diagram.html` (standalone diagram with 12 nodes)\n' +
+    '- Patched the demo parser in F:\\work\\demo\\src\\parse.ts'
+
+  const block = composeBlock(
+    [entry({ text })],
+    { project: 'demo', windowDays: 14, generatedAt: '2026-08-01' },
+    { vocabulary: VOCABULARY, deniedTerms: [] },
+  )
+
+  assert.match(block, /Chose PostgreSQL/)
+  assert.doesNotMatch(block, /standalone diagram/)
+  assert.doesNotMatch(block, /\[local path\]\s*$/m)
 })
 
 test('composeBlock skips bullets that are only a link', () => {
