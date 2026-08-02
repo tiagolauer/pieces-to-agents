@@ -195,6 +195,12 @@ so this is usually the strongest signal available, but a session with a vague ti
 even when its content belongs to your project. `--alias` is the way out, and it takes any name
 the session might be titled after.
 
+The bullet filters read English. Something that happened is recognised by an opening past-tense
+verb, work still to do by an English imperative, and a title is split on the word "and". PiecesOS
+wrote every summary seen during development in English, whatever language the work itself was in,
+so this normally costs nothing. If your summaries arrive in another language, every bullet fails
+the tense check and the run ends reporting no project match.
+
 ## Development
 
 ```bash
