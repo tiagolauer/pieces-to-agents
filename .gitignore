@@ -5,6 +5,7 @@ dist/
 .pieces-to-agents-ignore
 .DS_Store
 
-# Internal planning notes — never publish
+# Internal planning notes, never publish
 ARCHITECTURE.md
 PITCH.md
+FEEDBACK.md
