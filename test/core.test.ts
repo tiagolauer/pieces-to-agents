@@ -4,12 +4,14 @@ import { test } from 'node:test'
 import { composeBlock, spliceManagedBlock, trimTitleToProject } from '../src/agents-file.ts'
 import {
   CLIENT_VERSION,
+  DEFAULT_WINDOW_DAYS,
   MARKER_END,
   MARKER_START,
   MemoryCategory,
   SyncFailure,
   TargetFile,
   resolveTargetFile,
+  resolveWindowDays,
 } from '../src/core.ts'
 import { isAboutProject, type MemoryEntry } from '../src/memory.ts'
 import { redact } from '../src/redact.ts'
@@ -270,6 +272,20 @@ test('resolveTargetFile rejects anything else instead of falling back silently',
   assert.equal(resolveTargetFile('README.md'), null)
   assert.equal(resolveTargetFile('CLAUDE.txt'), null)
   assert.equal(resolveTargetFile(''), null)
+})
+
+test('resolveWindowDays accepts a positive whole number and defaults when absent', () => {
+  assert.equal(resolveWindowDays('30'), 30)
+  assert.equal(resolveWindowDays(' 14 '), 14)
+  assert.equal(resolveWindowDays(undefined), DEFAULT_WINDOW_DAYS)
+})
+
+test('resolveWindowDays rejects anything else instead of falling back silently', () => {
+  assert.equal(resolveWindowDays('0'), null)
+  assert.equal(resolveWindowDays('-5'), null)
+  assert.equal(resolveWindowDays('30abc'), null)
+  assert.equal(resolveWindowDays('abc'), null)
+  assert.equal(resolveWindowDays(''), null)
 })
 
 test('CLIENT_VERSION mirrors the package.json version', async () => {

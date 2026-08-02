@@ -34,6 +34,16 @@ export const resolveTargetFile = (requested: string): TargetFile | null => {
   return null
 }
 
+const POSITIVE_WHOLE_NUMBER_PATTERN = /^[1-9]\d*$/
+
+export const resolveWindowDays = (requested: string | undefined): number | null => {
+  if (requested === undefined) return DEFAULT_WINDOW_DAYS
+
+  const trimmed = requested.trim()
+  if (!POSITIVE_WHOLE_NUMBER_PATTERN.test(trimmed)) return null
+  return Number.parseInt(trimmed, 10)
+}
+
 export enum SyncFailure {
   NotAGitRepository = 'not-a-git-repository',
   PiecesOsUnreachable = 'pieces-os-unreachable',
@@ -44,6 +54,7 @@ export enum SyncFailure {
   NoProjectMatch = 'no-project-match',
   UnknownTarget = 'unknown-target',
   UnknownOption = 'unknown-option',
+  InvalidDays = 'invalid-days',
   ManagedBlockConflict = 'managed-block-conflict',
   ReadFailed = 'read-failed',
   WriteFailed = 'write-failed',
