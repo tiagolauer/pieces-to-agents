@@ -130,9 +130,9 @@ export const composeBlock = (
   for (const category of Object.values(MemoryCategory)) {
     const rendered = entries
       .filter((entry) => entry.category === category)
-      .slice(0, MAX_ENTRIES_PER_CATEGORY)
       .map((entry) => renderEntry(entry, filters))
       .filter((block): block is string => block !== null)
+      .slice(0, MAX_ENTRIES_PER_CATEGORY)
 
     if (rendered.length === 0) continue
 
