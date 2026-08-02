@@ -5,6 +5,24 @@ export const DENY_LIST_FILENAME = '.pieces-to-agents-ignore'
 
 const REDACTED = '[redacted]'
 
+const PLACEHOLDER_LABELS = [
+  'redacted',
+  'email',
+  'jwt',
+  'github-token',
+  'slack-token',
+  'aws-key',
+  'api-key',
+  'url-with-credentials',
+  'phone',
+  'local path',
+] as const
+
+const ORPHAN_BRACKET_PATTERN = new RegExp(
+  `\\[(?!(?:${PLACEHOLDER_LABELS.join('|')})\\])([^\\]]+)\\](?!\\()`,
+  'g',
+)
+
 const SECRET_PATTERNS: ReadonlyArray<readonly [RegExp, string]> = [
   [/[\w.+-]+@[\w-]+(?:\.[\w-]+)*\.[a-z]{2,}\b/gi, '[email]'],
   [/file:\/\/\/\S+/gi, '[local path]'],
@@ -16,6 +34,7 @@ const SECRET_PATTERNS: ReadonlyArray<readonly [RegExp, string]> = [
   [/\bAKIA[0-9A-Z]{16}\b/g, '[aws-key]'],
   [/\b(?:sk|pk|rk)[-_](?:live|test|proj)?[-_]?[A-Za-z0-9]{20,}/gi, '[api-key]'],
   [/\b[A-Za-z][A-Za-z0-9+.-]*:\/\/[^\s/@:]+:[^\s/@]+@\S+/g, '[url-with-credentials]'],
+  [/\[([^\]]+)\]\(\s*pieces:\/\/[^)]*\)/gi, '$1'],
   [/\(pieces:\/\/[^)\s]+\)/gi, ''],
   [/pieces:\/\/\S+/gi, ''],
   [/\+\d[\d  ().-]{7,}\d/g, '[phone]'],
@@ -26,6 +45,7 @@ const MALFORMED_LINK_PATTERNS: ReadonlyArray<readonly [RegExp, string]> = [
   [/\[`?\[(?:local path|phone|email)\]`?\]\([^)]*\)?/g, '[redacted]'],
   [/\[([^\]]+)\]\(\s*`?\[(?:local path|phone|email)\]`?[^)]*\)?/g, '$1'],
   [/\[([^\]]+)\]\([^)\s]*$/g, '$1'],
+  [ORPHAN_BRACKET_PATTERN, '$1'],
 ]
 
 const escapeForRegex = (term: string): string => term.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')

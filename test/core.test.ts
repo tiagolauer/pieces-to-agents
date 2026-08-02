@@ -105,6 +105,19 @@ test('redact does not leave broken markdown when a link target is scrubbed', () 
   assert.doesNotMatch(scrubbed, /core\.ts/)
 })
 
+test('redact collapses an internal Pieces link to its text', () => {
+  const scrubbed = redact('Handled [TypeScript](pieces://assets/abc123) 7.0 API changes')
+
+  assert.equal(scrubbed, 'Handled TypeScript 7.0 API changes')
+})
+
+test('redact keeps its own placeholders intact', () => {
+  const scrubbed = redact('Wrote to F:\\work\\app\\core.ts and mailed dev@example.com')
+
+  assert.match(scrubbed, /\[local path\]/)
+  assert.match(scrubbed, /\[email\]/)
+})
+
 test('redact removes a path whose folders contain spaces', () => {
   const scrubbed = redact('Refactored F:\\Fontes\\Client Work\\secret-app\\src\\core.ts')
 
