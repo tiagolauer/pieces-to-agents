@@ -88,6 +88,23 @@ test('redact removes absolute paths from any platform', () => {
   }
 })
 
+test('redact removes phone numbers', () => {
+  const international = redact('Outreach from a founder (+39 389 283 6813) about a role')
+  const brazilian = redact('Called (11) 98765-4321 to confirm')
+
+  assert.doesNotMatch(international, /389 283 6813/)
+  assert.doesNotMatch(brazilian, /98765-4321/)
+  assert.match(international, /\[phone\]/)
+  assert.match(brazilian, /\[phone\]/)
+})
+
+test('redact does not leave broken markdown when a link target is scrubbed', () => {
+  const scrubbed = redact('Refactored in [`F:\\work\\app\\src\\core.ts`](file:///F:/work/app/src/core.ts) today')
+
+  assert.doesNotMatch(scrubbed, /\]\(/)
+  assert.doesNotMatch(scrubbed, /core\.ts/)
+})
+
 test('redact removes a path whose folders contain spaces', () => {
   const scrubbed = redact('Refactored F:\\Fontes\\Client Work\\secret-app\\src\\core.ts')
 

@@ -18,6 +18,14 @@ const SECRET_PATTERNS: ReadonlyArray<readonly [RegExp, string]> = [
   [/\b[A-Za-z][A-Za-z0-9+.-]*:\/\/[^\s/@:]+:[^\s/@]+@\S+/g, '[url-with-credentials]'],
   [/\(pieces:\/\/[^)\s]+\)/gi, ''],
   [/pieces:\/\/\S+/gi, ''],
+  [/\+\d[\d  ().-]{7,}\d/g, '[phone]'],
+  [/\(\d{2,3}\)\s?\d{4,5}[- ]?\d{4}/g, '[phone]'],
+]
+
+const MALFORMED_LINK_PATTERNS: ReadonlyArray<readonly [RegExp, string]> = [
+  [/\[`?\[(?:local path|phone|email)\]`?\]\([^)]*\)?/g, '[redacted]'],
+  [/\[([^\]]+)\]\(\s*`?\[(?:local path|phone|email)\]`?[^)]*\)?/g, '$1'],
+  [/\[([^\]]+)\]\([^)\s]*$/g, '$1'],
 ]
 
 const escapeForRegex = (term: string): string => term.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
@@ -33,6 +41,10 @@ export const redact = (text: string, deniedTerms: ReadonlyArray<string> = []): s
     const trimmed = term.trim()
     if (trimmed.length === 0) continue
     output = output.replace(new RegExp(escapeForRegex(trimmed), 'gi'), REDACTED)
+  }
+
+  for (const [pattern, replacement] of MALFORMED_LINK_PATTERNS) {
+    output = output.replace(pattern, replacement)
   }
 
   return output
