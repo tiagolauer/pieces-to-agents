@@ -5,6 +5,7 @@ import { createInterface } from 'node:readline/promises'
 import { parseArgs } from 'node:util'
 import { diffLines } from 'diff'
 import {
+  CLIENT_VERSION,
   DEFAULT_WINDOW_DAYS,
   MILLISECONDS_PER_DAY,
   SyncFailure,
@@ -39,6 +40,7 @@ Options:
   --project <name>  Term used to match memories to this project (default: repository folder name)
   --alias <name>    Another name this project goes by; repeat for more than one
   -h, --help        Show this help
+  -v, --version     Show the version
 `
 
 const FAILURE_MESSAGES: Readonly<Record<SyncFailure, string>> = {
@@ -58,6 +60,8 @@ const FAILURE_MESSAGES: Readonly<Record<SyncFailure, string>> = {
     'Memories were found, but none mention this project. Pass --alias with a name that appears in your work, or use --project.',
   [SyncFailure.UnknownTarget]: 'Unknown --target. Use AGENTS.md or CLAUDE.md.',
   [SyncFailure.UnknownOption]: 'Unknown option. Run pieces-to-agents --help to see the options.',
+  [SyncFailure.EveryBulletFiltered]:
+    'Sessions matched this project, but every line was filtered out. The bullet filters only read English, so summaries written in another language are dropped wholesale. If that is the case here, this tool cannot help yet.',
   [SyncFailure.InvalidDays]: 'Invalid --days. Use a positive whole number of days.',
   [SyncFailure.ManagedBlockConflict]:
     'The target file has a malformed pieces-to-agents block. Fix the start/end markers manually.',
@@ -76,6 +80,7 @@ const EXIT_CODES: Readonly<Record<SyncFailure, number>> = {
   [SyncFailure.NoProjectMatch]: 6,
   [SyncFailure.UnknownTarget]: 10,
   [SyncFailure.UnknownOption]: 12,
+  [SyncFailure.EveryBulletFiltered]: 14,
   [SyncFailure.InvalidDays]: 13,
   [SyncFailure.ManagedBlockConflict]: 7,
   [SyncFailure.ReadFailed]: 8,
@@ -135,6 +140,7 @@ const parseCliValues = () => {
           project: { type: 'string' },
           alias: { type: 'string', multiple: true, default: [] },
           help: { type: 'boolean', short: 'h', default: false },
+          version: { type: 'boolean', short: 'v', default: false },
         },
         allowPositionals: true,
       }).values,
@@ -151,6 +157,11 @@ const run = async (): Promise<Result<string, SyncFailure>> => {
 
   if (values.help) {
     process.stdout.write(USAGE)
+    return ok('')
+  }
+
+  if (values.version) {
+    process.stdout.write(`${CLIENT_VERSION}\n`)
     return ok('')
   }
 
@@ -183,6 +194,7 @@ const run = async (): Promise<Result<string, SyncFailure>> => {
     project,
     aliases: values.alias ?? [],
     since,
+    windowDays,
   })
   if (!memories.ok) return memories
 
@@ -201,7 +213,7 @@ const run = async (): Promise<Result<string, SyncFailure>> => {
     { vocabulary, deniedTerms },
   )
 
-  if (!block.includes('### ')) return err(SyncFailure.NoProjectMatch)
+  if (!block.includes('### ')) return err(SyncFailure.EveryBulletFiltered)
 
   const renderedCount = (block.match(/^\*\*/gm) ?? []).length
 
@@ -235,6 +247,8 @@ const outcome = await run()
 if (outcome.ok) {
   if (outcome.value.length > 0) process.stdout.write(`${GREEN}${outcome.value}${RESET}\n`)
 } else {
-  process.stdout.write(`\n${RED}${FAILURE_MESSAGES[outcome.error]}${RESET}\n`)
-  process.exitCode = EXIT_CODES[outcome.error]
+  const exitCode = EXIT_CODES[outcome.error]
+  const colour = exitCode === 0 ? DIM : RED
+  process.stdout.write(`\n${colour}${FAILURE_MESSAGES[outcome.error]}${RESET}\n`)
+  process.exitCode = exitCode
 }

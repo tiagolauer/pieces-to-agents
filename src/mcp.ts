@@ -127,7 +127,12 @@ export class McpClient {
     }
 
     if (!isRecord(parsed)) return err(SyncFailure.McpCallFailed)
-    if (isRecord(parsed.error)) return err(SyncFailure.McpCallFailed)
+
+    if (isRecord(parsed.error)) {
+      const detail = typeof parsed.error.message === 'string' ? parsed.error.message : 'no detail'
+      process.stderr.write(`  PiecesOS refused the call: ${detail}\n`)
+      return err(SyncFailure.McpCallFailed)
+    }
 
     return ok(parsed as JsonRpcResponse)
   }

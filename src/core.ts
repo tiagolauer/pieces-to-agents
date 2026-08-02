@@ -57,6 +57,7 @@ export enum SyncFailure {
   NoProjectMatch = 'no-project-match',
   UnknownTarget = 'unknown-target',
   UnknownOption = 'unknown-option',
+  EveryBulletFiltered = 'every-bullet-filtered',
   InvalidDays = 'invalid-days',
   ManagedBlockConflict = 'managed-block-conflict',
   ReadFailed = 'read-failed',
@@ -118,6 +119,9 @@ export const CLIENT_VERSION = await readOwnVersion()
 
 export const MARKER_START = '<!-- pieces-to-agents:start -->'
 export const MARKER_END = '<!-- pieces-to-agents:end -->'
+
+export const MAX_BATCH_IDENTIFIERS = 100
+export const MAX_SEARCH_LIMIT = 100
 
 export const DEFAULT_WINDOW_DAYS = 14
 export const DEFAULT_SEARCH_LIMIT = 8

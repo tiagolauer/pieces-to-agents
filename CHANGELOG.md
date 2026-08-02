@@ -1,5 +1,30 @@
 # Changelog
 
+## 0.1.14
+
+A long window used to fail outright. `annotations_batch_snapshot` accepts at most 100 identifiers,
+and a wide search sent more than that, so `--days 365` died every time with a generic call
+failure. Batched requests are now split into chunks of 100. The server had been saying exactly
+what was wrong, `Array length must be <= 100`, and the client was discarding the message; JSON-RPC
+errors now reach the terminal.
+
+Asking for a longer window fetched nothing extra. The search asked for eight hits per category
+whatever the window, and the window was applied afterwards, so a bigger `--days` only filtered
+less of the same handful. The limit now scales with the window, up to the server's ceiling of 100.
+
+The four category searches ran one after another. They are independent, and running them together
+took a real run from 17 seconds to under two.
+
+A summary found only by keyword search carried a score of zero, so the first category in iteration
+order always won and everything landed under Architecture decisions. Undecided summaries are now
+categorised by which category keyword their own text uses most, and stay undecided if none fits.
+
+When every bullet was filtered out, the error suggested passing `--alias`, which fixes nothing.
+That case now has its own message and says that the bullet filters only read English, so summaries
+in another language are dropped wholesale.
+
+Adds `--version`. Cancelling no longer prints in red, since it is not a failure.
+
 ## 0.1.13
 
 The client advertised `Accept: text/event-stream` but only ever parsed a plain JSON body. The

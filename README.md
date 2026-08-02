@@ -190,6 +190,14 @@ and this tool filters and redacts them without verifying anything, so an error i
 reaches your file intact. A real run reported a version number with a digit too many. Read the
 diff for accuracy as well as for privacy, and put a wrong sentence in the deny-list to drop it.
 
+A wider `--days` fetches more, but not proportionally more, and the result is not monotonic. The
+search ceiling is 100 hits per category, and a longer window pulls in older sessions that compete
+for the same per-category slots, so a year can surface fewer entries than three months. Try a few
+windows rather than assuming the widest is best.
+
+The file is read before the prompt and written after it. Editing the target by hand while the
+confirmation is waiting means your edit is overwritten.
+
 Project matching reads the session title only. Pieces names sessions after what you worked on,
 so this is usually the strongest signal available, but a session with a vague title is dropped
 even when its content belongs to your project. `--alias` is the way out, and it takes any name

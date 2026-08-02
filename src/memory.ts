@@ -4,7 +4,10 @@ import {
   CATEGORY_KEYWORDS,
   CATEGORY_QUERIES,
   DEFAULT_SEARCH_LIMIT,
+  DEFAULT_WINDOW_DAYS,
   FULL_TEXT_SCORE,
+  MAX_BATCH_IDENTIFIERS,
+  MAX_SEARCH_LIMIT,
   MemoryCategory,
   SIMILARITY_THRESHOLD,
   SyncFailure,
@@ -26,6 +29,28 @@ export type CollectOptions = {
   readonly project: string
   readonly aliases: ReadonlyArray<string>
   readonly since: Date
+  readonly windowDays: number
+}
+
+export const searchLimitForWindow = (windowDays: number): number => {
+  const scaled = Math.ceil(windowDays / DEFAULT_WINDOW_DAYS) * DEFAULT_SEARCH_LIMIT
+  return Math.min(MAX_SEARCH_LIMIT, Math.max(DEFAULT_SEARCH_LIMIT, scaled))
+}
+
+export const categoryFromKeywords = (haystack: string): MemoryCategory | null => {
+  const folded = haystack.toLowerCase()
+  let best: MemoryCategory | null = null
+  let bestCount = 0
+
+  for (const category of Object.values(MemoryCategory)) {
+    const occurrences = folded.split(CATEGORY_KEYWORDS[category]).length - 1
+    if (occurrences > bestCount) {
+      bestCount = occurrences
+      best = category
+    }
+  }
+
+  return best
 }
 
 const foldForMatching = (value: string): string =>
@@ -100,17 +125,18 @@ const searchCategory = async (
   client: McpClient,
   category: MemoryCategory,
   project: string,
+  searchLimit: number,
 ): Promise<Result<ReadonlyArray<ScoredCategory & { id: string }>, SyncFailure>> => {
   const semantic = await client.callTool('workstream_summaries_vector_search', {
     query: `${CATEGORY_QUERIES[category]} in the project ${project}`,
-    limit: DEFAULT_SEARCH_LIMIT,
+    limit: searchLimit,
     threshold: SIMILARITY_THRESHOLD,
   })
   if (!semantic.ok) return semantic
 
   const keyword = await client.callTool('workstream_summaries_full_text_search', {
     query: `${project} ${CATEGORY_KEYWORDS[category]}`,
-    limit: DEFAULT_SEARCH_LIMIT,
+    limit: searchLimit,
   })
   if (!keyword.ok) return keyword
 
@@ -126,14 +152,37 @@ const searchCategory = async (
   return ok(hits)
 }
 
+const batchSnapshot = async (
+  client: McpClient,
+  tool: string,
+  identifiers: ReadonlyArray<string>,
+): Promise<Result<ReadonlyArray<Record<string, unknown>>, SyncFailure>> => {
+  const collected: Array<Record<string, unknown>> = []
+
+  for (let start = 0; start < identifiers.length; start += MAX_BATCH_IDENTIFIERS) {
+    const chunk = identifiers.slice(start, start + MAX_BATCH_IDENTIFIERS)
+    const response = await client.callTool(tool, { identifiers: chunk })
+    if (!response.ok) return response
+    collected.push(...readItems(response.value))
+  }
+
+  return ok(collected)
+}
+
 export const collectMemories = async (
   client: McpClient,
   options: CollectOptions,
 ): Promise<Result<ReadonlyArray<MemoryEntry>, SyncFailure>> => {
   const bestCategoryBySummary = new Map<string, ScoredCategory>()
 
-  for (const category of Object.values(MemoryCategory)) {
-    const search = await searchCategory(client, category, options.project)
+  const searchLimit = searchLimitForWindow(options.windowDays)
+  const searches = await Promise.all(
+    Object.values(MemoryCategory).map((category) =>
+      searchCategory(client, category, options.project, searchLimit),
+    ),
+  )
+
+  for (const search of searches) {
     if (!search.ok) return search
 
     for (const hit of search.value) {
@@ -146,12 +195,12 @@ export const collectMemories = async (
 
   if (bestCategoryBySummary.size === 0) return err(SyncFailure.NoMemoriesInWindow)
 
-  const snapshot = await client.callTool('workstream_summaries_batch_snapshot', {
-    identifiers: [...bestCategoryBySummary.keys()],
-  })
+  const snapshot = await batchSnapshot(client, 'workstream_summaries_batch_snapshot', [
+    ...bestCategoryBySummary.keys(),
+  ])
   if (!snapshot.ok) return snapshot
 
-  const summariesInWindow = readItems(snapshot.value).filter((summary) => {
+  const summariesInWindow = snapshot.value.filter((summary) => {
     const createdAt = readCreatedAt(summary)
     if (!createdAt) return false
     return new Date(createdAt).getTime() >= options.since.getTime()
@@ -168,14 +217,14 @@ export const collectMemories = async (
 
   if (summaryByAnnotation.size === 0) return err(SyncFailure.NoMemoriesInWindow)
 
-  const annotations = await client.callTool('annotations_batch_snapshot', {
-    identifiers: [...summaryByAnnotation.keys()],
-  })
+  const annotations = await batchSnapshot(client, 'annotations_batch_snapshot', [
+    ...summaryByAnnotation.keys(),
+  ])
   if (!annotations.ok) return annotations
 
   const bodyBySummaryId = new Map<string, { title: string; createdAt: string; text: string; category: MemoryCategory }>()
 
-  for (const annotation of readItems(annotations.value)) {
+  for (const annotation of annotations.value) {
     const annotationId = readString(annotation, 'id')
     const annotationType = readString(annotation, 'type')
     const text = readString(annotation, 'text')
@@ -194,11 +243,18 @@ export const collectMemories = async (
     const isRicherBody = annotationType === AnnotationType.Summary
     if (existing && !isRicherBody) continue
 
+    const title = readString(summary, 'name') ?? 'Untitled session'
+    const scored = bestCategoryBySummary.get(summaryId)
+    const undecided = scored === undefined || scored.score <= FULL_TEXT_SCORE
+
     bodyBySummaryId.set(summaryId, {
-      title: readString(summary, 'name') ?? 'Untitled session',
+      title,
       createdAt,
       text,
-      category: bestCategoryBySummary.get(summaryId)?.category ?? MemoryCategory.ArchitectureDecisions,
+      category:
+        (undecided ? categoryFromKeywords(`${title}\n${text}`) : null) ??
+        scored?.category ??
+        MemoryCategory.ArchitectureDecisions,
     })
   }
 

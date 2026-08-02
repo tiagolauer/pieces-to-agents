@@ -13,7 +13,12 @@ import {
   resolveTargetFile,
   resolveWindowDays,
 } from '../src/core.ts'
-import { isAboutProject, type MemoryEntry } from '../src/memory.ts'
+import {
+  categoryFromKeywords,
+  isAboutProject,
+  searchLimitForWindow,
+  type MemoryEntry,
+} from '../src/memory.ts'
 import { parseEventStreamMessage } from '../src/mcp.ts'
 import { redact } from '../src/redact.ts'
 import { isAnchoredToProject } from '../src/vocabulary.ts'
@@ -185,6 +190,27 @@ test('isAboutProject ignores a passing mention in the session body', () => {
 
   assert.equal(isAboutProject(title, ['marco-agenda']), false)
   assert.equal(isAboutProject(`${title}\n${body}`, ['marco-agenda']), true)
+})
+
+test('searchLimitForWindow asks for more the further back you look', () => {
+  assert.equal(searchLimitForWindow(14), 8)
+  assert.equal(searchLimitForWindow(7), 8)
+  assert.equal(searchLimitForWindow(90), 56)
+  assert.equal(searchLimitForWindow(365), 100)
+  assert.equal(searchLimitForWindow(10_000), 100)
+})
+
+test('categoryFromKeywords picks the category the text talks about most', () => {
+  assert.equal(categoryFromKeywords('Fixed a bug, then another bug'), MemoryCategory.ResolvedBugs)
+  assert.equal(
+    categoryFromKeywords('Revisited the architecture of the loader'),
+    MemoryCategory.ArchitectureDecisions,
+  )
+  assert.equal(categoryFromKeywords('Adjusted the setup script'), MemoryCategory.EnvironmentGotchas)
+})
+
+test('categoryFromKeywords gives up rather than guessing', () => {
+  assert.equal(categoryFromKeywords('Shipped the release notes'), null)
 })
 
 test('isAnchoredToProject keeps bullets that touch the project vocabulary', () => {
