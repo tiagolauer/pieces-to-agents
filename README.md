@@ -185,6 +185,11 @@ not notice. A vector-only client will.
 The `created` filter on vector search returns nothing at all. The same query gives five results
 without it and zero with it, so the time window is applied on this side after fetching.
 
+Nothing here checks whether a memory is true. Pieces writes the summaries with a language model,
+and this tool filters and redacts them without verifying anything, so an error in a summary
+reaches your file intact. A real run reported a version number with a digit too many. Read the
+diff for accuracy as well as for privacy, and put a wrong sentence in the deny-list to drop it.
+
 Project matching reads the session title only. Pieces names sessions after what you worked on,
 so this is usually the strongest signal available, but a session with a vague title is dropped
 even when its content belongs to your project. `--alias` is the way out, and it takes any name
