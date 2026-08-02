@@ -1,5 +1,28 @@
 # Changelog
 
+## 0.1.13
+
+The client advertised `Accept: text/event-stream` but only ever parsed a plain JSON body. The
+streamable HTTP transport lets a server frame its answer as an SSE message, and any such reply
+collapsed into a generic call failure. When plain parsing fails, the body is now scanned for the
+first event whose data payload parses as JSON.
+
+An invalid `--days` fell back to the default instead of stopping. Asking for `--days abc` or
+`--days -5` silently used fourteen, which is the kind of quiet substitution this tool is supposed
+to refuse. It now exits with its own code.
+
+Colour escapes were written even when stdout was not a terminal, so piping the diff to a file or
+another program left the file full of control characters. They are emitted only for a TTY now.
+
+The entry cap counted before rendering, so a category could come up short when an entry was
+dropped for having no usable bullets. It applies after rendering.
+
+Two internal cleanups with no behaviour change: the search-hit category is attached once, inside
+`searchCategory`, and the accent-folding helper is shared by the matchers rather than duplicated.
+
+The README now says that the bullet filters only read English, which is a real limit for anyone
+whose sessions are summarised in another language.
+
 ## 0.1.12
 
 Asking for `--help` crashed with a stack trace, because the argument parser threw on any option
