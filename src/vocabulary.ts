@@ -1,5 +1,6 @@
 import { readFile, readdir } from 'node:fs/promises'
 import { join } from 'node:path'
+import { foldDiacritics } from './core.ts'
 
 const MINIMUM_TERM_LENGTH = 3
 const IGNORED_ENTRIES = new Set(['node_modules', '.git', 'dist', 'build', '.github', 'coverage'])
@@ -15,13 +16,11 @@ const GENERIC_TERMS: ReadonlySet<string> = new Set([
   'src', 'temp', 'test', 'tests', 'tmp', 'tools', 'types', 'unit', 'utils', 'web', 'www',
 ])
 
-const fold = (value: string): string => value.toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '')
-
 const keep = (term: string): boolean =>
   term.length >= MINIMUM_TERM_LENGTH && !GENERIC_TERMS.has(term)
 
 const addTerm = (into: Set<string>, raw: string): void => {
-  const folded = fold(raw).trim()
+  const folded = foldDiacritics(raw).trim()
   if (keep(folded)) into.add(folded)
 
   for (const part of folded.split(SEPARATOR_PATTERN)) {
@@ -88,7 +87,9 @@ export const isAnchoredToProject = (
 ): boolean => {
   if (PERSON_REFERENCE_PATTERN.test(bullet)) return false
 
-  const words = new Set(fold(bullet).split(SEPARATOR_PATTERN).filter((word) => word.length > 0))
+  const words = new Set(
+    foldDiacritics(bullet).split(SEPARATOR_PATTERN).filter((word) => word.length > 0),
+  )
 
   for (const term of vocabulary) {
     if (words.has(term)) return true
