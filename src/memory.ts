@@ -9,6 +9,7 @@ import {
   SIMILARITY_THRESHOLD,
   SyncFailure,
   err,
+  foldDiacritics,
   ok,
   type Result,
 } from './core.ts'
@@ -28,11 +29,7 @@ export type CollectOptions = {
 }
 
 const foldForMatching = (value: string): string =>
-  value
-    .toLowerCase()
-    .normalize('NFD')
-    .replace(/[̀-ͯ]/g, '')
-    .replace(/[^a-z0-9]/g, '')
+  foldDiacritics(value).replace(/[^a-z0-9]/g, '')
 
 export const isAboutProject = (sessionTitle: string, terms: ReadonlyArray<string>): boolean => {
   const folded = foldForMatching(sessionTitle)
