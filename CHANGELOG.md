@@ -1,5 +1,26 @@
 # Changelog
 
+## 0.1.12
+
+Asking for `--help` crashed with a stack trace, because the argument parser threw on any option
+it did not know, and that flag is the first thing a new user types. There is now a usage screen
+on `--help` and `-h`, and an unknown option exits with its own code and a single line pointing
+at the help.
+
+A run whose stdin closed without an answer, piped from a program with nothing to say or started
+without a terminal at all, hung forever at the confirmation prompt. End of input now reads as a
+no, and the run cancels.
+
+The client version sent in the MCP handshake was a hand-copied constant, one release away from
+drifting apart from the package. It is now read from `package.json` at runtime.
+
+When both searches found the same summary, the keyword hit always decided its category, because
+full-text matches carried the highest possible score. A semantic match now outranks a keyword
+hit, which only vouches for recall.
+
+CI now runs the build that only publishing exercised before, and the package page on npm links
+back to the repository, its issues and its author.
+
 ## 0.1.11
 
 Summaries link concepts back into Pieces with a `pieces://` target. Stripping the target left the
