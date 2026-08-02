@@ -8,9 +8,11 @@ const SEPARATOR_PATTERN = /[^a-z0-9]+/
 const PERSON_REFERENCE_PATTERN = /pieces:\/\/persons\//i
 
 const GENERIC_TERMS: ReadonlySet<string> = new Set([
-  'api', 'app', 'apps', 'assets', 'bin', 'build', 'cli', 'config', 'core', 'data', 'doc', 'docs',
-  'index', 'lib', 'main', 'memory', 'node', 'package', 'public', 'readme', 'scripts', 'server',
-  'src', 'test', 'tests', 'types', 'utils', 'web', 'www',
+  'api', 'app', 'apps', 'assets', 'bench', 'benchmark', 'bin', 'build', 'cli', 'common', 'config',
+  'core', 'data', 'doc', 'docs', 'e2e', 'example', 'examples', 'fixture', 'fixtures', 'helper',
+  'helpers', 'index', 'integration', 'lib', 'log', 'logs', 'main', 'memory', 'mock', 'mocks',
+  'node', 'output', 'package', 'public', 'readme', 'scripts', 'server', 'shared', 'spec', 'specs',
+  'src', 'temp', 'test', 'tests', 'tmp', 'tools', 'types', 'unit', 'utils', 'web', 'www',
 ])
 
 const fold = (value: string): string => value.toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '')

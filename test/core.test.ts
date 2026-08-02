@@ -316,6 +316,30 @@ test('composeBlock drops bullets left as nothing but a placeholder', () => {
   assert.doesNotMatch(block, /\[local path\]\s*$/m)
 })
 
+test('composeBlock keeps only bullets written as something that happened', () => {
+  const text = [
+    '- Chose PostgreSQL over MongoDB for relational integrity',
+    '- Ran the demo parser suite and confirmed a clean build',
+    '- You merged the demo parser fix',
+    '- demo repository and pull requests pages (multiple views of https://example.com/demo)',
+    '- Local demo scratchpad files created during the parser audit',
+    '- docs/demo-architecture.json (noted as outdated)',
+  ].join('\n')
+
+  const block = composeBlock(
+    [entry({ text })],
+    { project: 'demo', windowDays: 14, generatedAt: '2026-08-01' },
+    { vocabulary: VOCABULARY, deniedTerms: [] },
+  )
+
+  assert.match(block, /Chose PostgreSQL/)
+  assert.match(block, /Ran the demo parser suite/)
+  assert.match(block, /merged the demo parser fix/)
+  assert.doesNotMatch(block, /pull requests pages/)
+  assert.doesNotMatch(block, /scratchpad files/)
+  assert.doesNotMatch(block, /demo-architecture\.json/)
+})
+
 test('composeBlock skips bullets that are only a link', () => {
   const text =
     '- [pieces-to-agents - npm](https://www.npmjs.com/package/pieces-to-agents)\n' +

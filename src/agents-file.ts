@@ -24,6 +24,25 @@ const TRAILING_PLACEHOLDER_PATTERN = /\[(?:redacted|local path|phone|email)\]\s*
 const PENDING_WORK_PATTERN =
   /^(?:resolve|address|continue|merge|finalize|prioritize|update|implement|investigate|complete|review|verify|publish|create|add|fix|run|start|prepare|schedule|follow up|send|draft|test|refactor|remove|migrate)\b/i
 
+const SUBJECT_PREFIX_PATTERN = /^(?:you|we|the user|user)\s+/i
+
+const IRREGULAR_PAST_VERBS: ReadonlySet<string> = new Set([
+  'began', 'bought', 'brought', 'built', 'came', 'caught', 'chose', 'cut', 'dealt', 'drew',
+  'drove', 'fell', 'felt', 'fought', 'found', 'froze', 'gave', 'got', 'grew', 'held', 'hid',
+  'hit', 'kept', 'knew', 'laid', 'led', 'left', 'let', 'lit', 'lost', 'made', 'meant', 'met',
+  'paid', 'put', 'ran', 'read', 'rewrote', 'rose', 'said', 'sat', 'saw', 'sent', 'set', 'shut',
+  'sold', 'sought', 'spent', 'split', 'spoke', 'stood', 'swept', 'taught', 'thought', 'threw',
+  'told', 'took', 'troubleshot', 'understood', 'went', 'won', 'wrote',
+])
+
+const startsWithPastAction = (bullet: string): boolean => {
+  const withoutSubject = bullet.replace(SUBJECT_PREFIX_PATTERN, '')
+  const firstWord = /^([A-Za-z]+)/.exec(withoutSubject)?.[1]?.toLowerCase()
+
+  if (!firstWord) return false
+  return firstWord.endsWith('ed') || IRREGULAR_PAST_VERBS.has(firstWord)
+}
+
 const TITLE_SEGMENT_SEPARATOR = /\s+and\s+/i
 
 export type BlockMetadata = {
@@ -70,6 +89,7 @@ const extractBullets = (text: string, filters: BulletFilters): ReadonlyArray<str
     if (!isAnchoredToProject(content, filters.vocabulary)) continue
 
     if (PENDING_WORK_PATTERN.test(content)) continue
+    if (!startsWithPastAction(content)) continue
 
     const scrubbed = redact(content, filters.deniedTerms).replace(/\s{2,}/g, ' ').trim()
     if (scrubbed.length === 0) continue
