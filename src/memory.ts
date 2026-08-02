@@ -53,15 +53,15 @@ const readString = (source: Record<string, unknown>, key: string): string | null
   return typeof value === 'string' ? value : null
 }
 
-const readSearchIdentifiers = (payload: unknown): ReadonlyArray<ScoredCategory & { id: string }> => {
+const readSearchIdentifiers = (payload: unknown): ReadonlyArray<{ id: string; score: number }> => {
   if (!isRecord(payload) || !Array.isArray(payload.results)) return []
 
-  const found: Array<ScoredCategory & { id: string }> = []
+  const found: Array<{ id: string; score: number }> = []
   for (const entry of payload.results) {
     if (!isRecord(entry)) continue
     const id = readString(entry, 'identifier')
     const score = typeof entry.score === 'number' ? entry.score : 0
-    if (id) found.push({ id, score, category: MemoryCategory.ArchitectureDecisions })
+    if (id) found.push({ id, score })
   }
   return found
 }
