@@ -20,11 +20,12 @@ import { composeBlock, readTarget, spliceManagedBlock, writeTarget } from './age
 import { DENY_LIST_FILENAME, loadDenyList } from './redact.ts'
 import { collectProjectVocabulary } from './vocabulary.ts'
 
-const RESET = '[0m'
-const RED = '[31m'
-const GREEN = '[32m'
-const DIM = '[2m'
-const BOLD = '[1m'
+const useColor = process.stdout.isTTY === true
+const RESET = useColor ? '[0m' : ''
+const RED = useColor ? '[31m' : ''
+const GREEN = useColor ? '[32m' : ''
+const DIM = useColor ? '[2m' : ''
+const BOLD = useColor ? '[1m' : ''
 
 const USAGE = `Usage: pieces-to-agents [options]
 
