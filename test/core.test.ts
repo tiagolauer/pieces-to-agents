@@ -14,6 +14,7 @@ import {
   resolveWindowDays,
 } from '../src/core.ts'
 import { isAboutProject, type MemoryEntry } from '../src/memory.ts'
+import { parseEventStreamMessage } from '../src/mcp.ts'
 import { redact } from '../src/redact.ts'
 import { isAnchoredToProject } from '../src/vocabulary.ts'
 
@@ -404,6 +405,28 @@ test('composeBlock applies the entry cap after rendering, not before', () => {
   )
 
   assert.match(block, /Chose PostgreSQL/)
+})
+
+test('parseEventStreamMessage reads a JSON-RPC message out of an SSE body', () => {
+  const raw =
+    'event: message\ndata: {"jsonrpc":"2.0","id":"1","result":{"content":[{"type":"text","text":"{}"}]}}\n\n'
+
+  assert.deepEqual(parseEventStreamMessage(raw), {
+    jsonrpc: '2.0',
+    id: '1',
+    result: { content: [{ type: 'text', text: '{}' }] },
+  })
+})
+
+test('parseEventStreamMessage skips events that carry no JSON', () => {
+  const raw = 'event: ping\n\ndata: not json\n\ndata: {"jsonrpc":"2.0","id":"2","result":{}}\n\n'
+
+  assert.deepEqual(parseEventStreamMessage(raw), { jsonrpc: '2.0', id: '2', result: {} })
+})
+
+test('parseEventStreamMessage returns null when nothing parses', () => {
+  assert.equal(parseEventStreamMessage('event: ping\n\n'), null)
+  assert.equal(parseEventStreamMessage('not an event stream at all'), null)
 })
 
 test('composeBlock output round-trips through spliceManagedBlock', () => {
