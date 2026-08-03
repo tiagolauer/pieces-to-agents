@@ -1,5 +1,47 @@
 # Changelog
 
+## 0.1.17
+
+An end-to-end audit of the whole pipeline. Twelve fixes, the first one a real leak.
+
+The deny-list did not reach entries kept from previous runs. 0.1.16 started carrying forward
+entries the current search no longer returns, and carried them verbatim, so a term added to
+`.pieces-to-agents-ignore` after something leaked stayed in the file, despite the promise printed
+on every run that the deny-list redacts permanently. Kept bullets that mention a denied term are
+now dropped, kept headings are redacted, and a kept entry with no clean bullet left disappears.
+
+Two holes in the anchor vocabulary. The ignore list only applied at the repository root, so a
+first-level directory could contribute `dist`, `coverage` or `node_modules` children as anchors,
+and a bullet from another project mentioning "dist" passed the filter that exists to keep it out.
+Children now go through the same ignore list, and those names joined the generic terms. Separately,
+a UTF-8 BOM at the start of the target repository's `package.json` made `JSON.parse` throw into an
+empty catch, silently dropping the package name and every dependency from the vocabulary — the
+same failure 0.1.2 fixed for this repository itself. Both JSON reads now strip a leading BOM.
+
+Project matching, tightened in both directions. The run-together fallback searched for the term as
+a substring, so a project called `marco` matched a session titled "Marconi Radio"; the run-on form
+now has to equal a contiguous run of whole title tokens. And a vocabulary term carrying a
+separator could never match anything, which left a project named `to-do` with no working anchors
+at all, since `to` and `do` fall under the length floor; a multi-word term now matches as a token
+sequence.
+
+Ctrl+C at the confirmation prompt hung. With the terminal in raw mode, readline intercepts the
+keystroke and, with no listener on the interface, only pauses the stream. It now reads as a no
+and cancels the run.
+
+Two MCP transport fixes. The SSE fallback took the first event that parsed as JSON, so a server
+framing a notification before the response broke every call; the response is now picked by
+request id. And a timeout during the handshake claimed PiecesOS was not reachable and told you to
+start it when it was running and merely busy; a handshake timeout now reports as a timeout.
+
+Smaller honesty fixes. The confirmation prompt counted fresh plus kept entries while sounding
+like it counted additions; it now says it writes the file with that many memories, matching the
+message printed after the write. Cancelling had turned red again when 0.1.15 keyed the colour on
+the exit code; it is dim once more. The write-target temp file used a fixed name, so two runs
+clobbered each other and a failed rename left it behind forever; it now carries the process id
+and is removed on failure. The README no longer says non-English summaries end with no project
+match, and the CI BOM message says what the check actually greps.
+
 ## 0.1.16
 
 Running the tool a second time replaced the block instead of adding to it, so anything outside the
