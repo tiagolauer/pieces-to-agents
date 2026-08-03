@@ -1,5 +1,7 @@
 import assert from 'node:assert/strict'
-import { readFile } from 'node:fs/promises'
+import { mkdir, mkdtemp, readFile } from 'node:fs/promises'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
 import { test } from 'node:test'
 import { composeBlock, spliceManagedBlock, trimTitleToProject } from '../src/agents-file.ts'
 import {
@@ -21,7 +23,7 @@ import {
 } from '../src/memory.ts'
 import { parseEventStreamMessage } from '../src/mcp.ts'
 import { redact } from '../src/redact.ts'
-import { isAnchoredToProject } from '../src/vocabulary.ts'
+import { collectProjectVocabulary, isAnchoredToProject } from '../src/vocabulary.ts'
 
 const VOCABULARY: ReadonlySet<string> = new Set([
   'demo',
@@ -251,6 +253,23 @@ test('isAnchoredToProject ignores generic folder names as anchors', () => {
   const bullet = 'Drafted a support email about an SSL error on a client src config'
 
   assert.equal(isAnchoredToProject(bullet, vocabulary), false)
+})
+
+test('collectProjectVocabulary skips build artifacts one level down', async () => {
+  const root = await mkdtemp(join(tmpdir(), 'p2a-vocab-'))
+  await mkdir(join(root, 'frontend', 'dist'), { recursive: true })
+  await mkdir(join(root, 'frontend', 'node_modules'), { recursive: true })
+  await mkdir(join(root, 'frontend', 'coverage'), { recursive: true })
+  await mkdir(join(root, 'frontend', 'widgets'), { recursive: true })
+
+  const vocabulary = await collectProjectVocabulary(root, ['myproj'])
+
+  assert.equal(vocabulary.has('dist'), false)
+  assert.equal(vocabulary.has('coverage'), false)
+  assert.equal(vocabulary.has('modules'), false)
+  assert.equal(vocabulary.has('frontend'), true)
+  assert.equal(vocabulary.has('widgets'), true)
+  assert.equal(vocabulary.has('myproj'), true)
 })
 
 test('isAnchoredToProject drops bullets from a mixed session', () => {

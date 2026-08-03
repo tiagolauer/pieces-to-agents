@@ -10,10 +10,11 @@ const PERSON_REFERENCE_PATTERN = /pieces:\/\/persons\//i
 
 const GENERIC_TERMS: ReadonlySet<string> = new Set([
   'api', 'app', 'apps', 'assets', 'bench', 'benchmark', 'bin', 'build', 'cli', 'common', 'config',
-  'core', 'data', 'doc', 'docs', 'e2e', 'example', 'examples', 'fixture', 'fixtures', 'helper',
-  'helpers', 'index', 'integration', 'lib', 'log', 'logs', 'main', 'memory', 'mock', 'mocks',
-  'node', 'output', 'package', 'public', 'readme', 'scripts', 'server', 'shared', 'spec', 'specs',
-  'src', 'temp', 'test', 'tests', 'tmp', 'tools', 'types', 'unit', 'utils', 'web', 'www',
+  'core', 'coverage', 'data', 'dist', 'doc', 'docs', 'e2e', 'example', 'examples', 'fixture',
+  'fixtures', 'helper', 'helpers', 'index', 'integration', 'lib', 'log', 'logs', 'main', 'memory',
+  'mock', 'mocks', 'modules', 'node', 'output', 'package', 'public', 'readme', 'scripts', 'server',
+  'shared', 'spec', 'specs', 'src', 'temp', 'test', 'tests', 'tmp', 'tools', 'types', 'unit',
+  'utils', 'web', 'www',
 ])
 
 const keep = (term: string): boolean =>
@@ -68,7 +69,7 @@ export const collectProjectVocabulary = async (
       if (!entry.isDirectory()) continue
       const children = await readdir(join(repositoryRoot, entry.name), { withFileTypes: true })
       for (const child of children) {
-        if (child.name.startsWith('.')) continue
+        if (IGNORED_ENTRIES.has(child.name) || child.name.startsWith('.')) continue
         addTerm(vocabulary, child.name.replace(/\.[a-z0-9]+$/i, ''))
       }
     }
