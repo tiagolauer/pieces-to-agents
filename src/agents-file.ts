@@ -168,6 +168,15 @@ export const parseManagedBlock = (existing: string): ReadonlyArray<RenderedEntry
   return entries
 }
 
+const refilterKeptEntry = (entry: RenderedEntry, filters: BulletFilters): RenderedEntry | null => {
+  const [heading = '', , ...bullets] = entry.body.split('\n')
+  const clean = bullets.filter((bullet) => !mentionsDeniedTerm(bullet, filters.deniedTerms))
+  if (clean.length === 0) return null
+
+  const scrubbedHeading = redact(heading, filters.deniedTerms)
+  return { ...entry, body: [scrubbedHeading, '', ...clean].join('\n') }
+}
+
 export const composeBlock = (
   entries: ReadonlyArray<MemoryEntry>,
   metadata: BlockMetadata,
@@ -182,9 +191,10 @@ export const composeBlock = (
   }
 
   const seen = new Set(fresh.map((entry) => entry.body.split('\n')[0]))
-  const kept = parseManagedBlock(previousBlock).filter(
-    (entry) => !seen.has(entry.body.split('\n')[0]),
-  )
+  const kept = parseManagedBlock(previousBlock)
+    .map((entry) => refilterKeptEntry(entry, filters))
+    .filter((entry): entry is RenderedEntry => entry !== null)
+    .filter((entry) => !seen.has(entry.body.split('\n')[0]))
 
   const pool = [...fresh, ...kept].sort((left, right) => right.day.localeCompare(left.day))
 

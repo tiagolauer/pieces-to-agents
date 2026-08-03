@@ -533,6 +533,71 @@ test('composeBlock lets newer entries push the oldest out of a full category', (
   assert.match(next, /Session 4/)
 })
 
+test('composeBlock drops a kept bullet once its term joins the deny-list', () => {
+  const text =
+    '- Chose PostgreSQL over MongoDB for relational integrity\n' +
+    '- Reviewed the AcmeCorp contract while wiring the parser'
+
+  const previous = composeBlock(
+    [entry({ title: 'Old session', createdAt: '2026-07-01T10:00:00.000Z', text })],
+    { project: 'demo', windowDays: 30, generatedAt: '2026-07-01' },
+    { vocabulary: VOCABULARY, deniedTerms: [] },
+  )
+  assert.match(previous, /AcmeCorp/)
+
+  const next = composeBlock(
+    [entry({ title: 'Fresh session', createdAt: '2026-08-01T10:00:00.000Z' })],
+    { project: 'demo', windowDays: 30, generatedAt: '2026-08-02' },
+    { vocabulary: VOCABULARY, deniedTerms: ['acmecorp'] },
+    previous,
+  )
+
+  assert.doesNotMatch(next, /acmecorp/i)
+  assert.match(next, /Old session/)
+  assert.match(next, /Chose PostgreSQL/)
+})
+
+test('composeBlock drops a kept entry when every bullet mentions a denied term', () => {
+  const previous = composeBlock(
+    [entry({
+      title: 'Old session',
+      createdAt: '2026-07-01T10:00:00.000Z',
+      text: '- Reviewed the AcmeCorp contract while wiring the parser',
+    })],
+    { project: 'demo', windowDays: 30, generatedAt: '2026-07-01' },
+    { vocabulary: VOCABULARY, deniedTerms: [] },
+  )
+
+  const next = composeBlock(
+    [entry({ title: 'Fresh session', createdAt: '2026-08-01T10:00:00.000Z' })],
+    { project: 'demo', windowDays: 30, generatedAt: '2026-08-02' },
+    { vocabulary: VOCABULARY, deniedTerms: ['acmecorp'] },
+    previous,
+  )
+
+  assert.doesNotMatch(next, /acmecorp/i)
+  assert.doesNotMatch(next, /Old session/)
+})
+
+test('composeBlock redacts a denied term from a kept heading', () => {
+  const previous = composeBlock(
+    [entry({ title: 'Demo Refactor and AcmeCorp Troubleshooting', createdAt: '2026-07-01T10:00:00.000Z' })],
+    { project: 'demo', windowDays: 30, generatedAt: '2026-07-01' },
+    { vocabulary: new Set(['demo', 'acmecorp', 'postgresql', 'mongodb']), deniedTerms: [] },
+  )
+  assert.match(previous, /AcmeCorp/)
+
+  const next = composeBlock(
+    [entry({ title: 'Fresh session', createdAt: '2026-08-01T10:00:00.000Z' })],
+    { project: 'demo', windowDays: 30, generatedAt: '2026-08-02' },
+    { vocabulary: VOCABULARY, deniedTerms: ['acmecorp'] },
+    previous,
+  )
+
+  assert.doesNotMatch(next, /acmecorp/i)
+  assert.match(next, /\[redacted\] Troubleshooting/)
+})
+
 test('composeBlock output round-trips through spliceManagedBlock', () => {
   const block = composeBlock(
     [entry()],
