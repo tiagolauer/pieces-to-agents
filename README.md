@@ -108,6 +108,12 @@ Running both covers the gap.
 Text outside the `<!-- pieces-to-agents:start -->` and `<!-- pieces-to-agents:end -->` markers is
 never touched, so whatever instructions you wrote by hand survive every run.
 
+Running it again later adds to the block rather than replacing it. Entries already in the file are
+kept even when the current search no longer returns them, which is what stops a short `--days` from
+erasing a decision you recorded a month ago. Each section holds four entries, so an old one only
+leaves when four newer ones have pushed it out. If you want something to stay permanently, move it
+above the start marker and it becomes yours.
+
 There is a second path through the Pieces API, `ask_memory`, which this tool does not use. It
 takes around 3.3 seconds and hands back raw screen OCR. The summary chain above takes about 70
 milliseconds and hands back markdown that Pieces already wrote for you.

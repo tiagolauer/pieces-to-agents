@@ -203,6 +203,9 @@ const run = async (): Promise<Result<string, SyncFailure>> => {
     ...(values.alias ?? []),
   ])
 
+  const existing = await readTarget(targetPath)
+  if (!existing.ok) return existing
+
   const block = composeBlock(
     memories.value,
     {
@@ -211,14 +214,12 @@ const run = async (): Promise<Result<string, SyncFailure>> => {
       generatedAt: new Date().toISOString().slice(0, 10),
     },
     { vocabulary, deniedTerms },
+    existing.value,
   )
 
   if (!block.includes('### ')) return err(SyncFailure.EveryBulletFiltered)
 
   const renderedCount = (block.match(/^\*\*/gm) ?? []).length
-
-  const existing = await readTarget(targetPath)
-  if (!existing.ok) return existing
 
   const updated = spliceManagedBlock(existing.value, block)
   if (!updated.ok) return updated

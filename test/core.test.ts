@@ -476,6 +476,63 @@ test('parseEventStreamMessage returns null when nothing parses', () => {
   assert.equal(parseEventStreamMessage('not an event stream at all'), null)
 })
 
+test('composeBlock keeps an older entry the current search no longer returns', () => {
+  const previous = composeBlock(
+    [entry({ title: 'Old session', createdAt: '2026-06-01T10:00:00.000Z' })],
+    { project: 'demo', windowDays: 90, generatedAt: '2026-06-01' },
+    { vocabulary: VOCABULARY, deniedTerms: [] },
+  )
+
+  const next = composeBlock(
+    [entry({ title: 'New session', createdAt: '2026-08-01T10:00:00.000Z' })],
+    { project: 'demo', windowDays: 3, generatedAt: '2026-08-02' },
+    { vocabulary: VOCABULARY, deniedTerms: [] },
+    previous,
+  )
+
+  assert.match(next, /New session/)
+  assert.match(next, /Old session/)
+})
+
+test('composeBlock does not duplicate an entry that came back again', () => {
+  const previous = composeBlock(
+    [entry({ title: 'Same session', createdAt: '2026-08-01T10:00:00.000Z' })],
+    { project: 'demo', windowDays: 30, generatedAt: '2026-08-01' },
+    { vocabulary: VOCABULARY, deniedTerms: [] },
+  )
+
+  const next = composeBlock(
+    [entry({ title: 'Same session', createdAt: '2026-08-01T10:00:00.000Z' })],
+    { project: 'demo', windowDays: 30, generatedAt: '2026-08-02' },
+    { vocabulary: VOCABULARY, deniedTerms: [] },
+    previous,
+  )
+
+  assert.equal((next.match(/Same session/g) ?? []).length, 1)
+})
+
+test('composeBlock lets newer entries push the oldest out of a full category', () => {
+  const older = [1, 2, 3, 4].map((n) =>
+    entry({ title: `Session ${n}`, createdAt: `2026-06-0${n}T10:00:00.000Z` }),
+  )
+  const previous = composeBlock(
+    older,
+    { project: 'demo', windowDays: 90, generatedAt: '2026-06-05' },
+    { vocabulary: VOCABULARY, deniedTerms: [] },
+  )
+
+  const next = composeBlock(
+    [entry({ title: 'Newest session', createdAt: '2026-08-01T10:00:00.000Z' })],
+    { project: 'demo', windowDays: 3, generatedAt: '2026-08-02' },
+    { vocabulary: VOCABULARY, deniedTerms: [] },
+    previous,
+  )
+
+  assert.match(next, /Newest session/)
+  assert.doesNotMatch(next, /Session 1\b/)
+  assert.match(next, /Session 4/)
+})
+
 test('composeBlock output round-trips through spliceManagedBlock', () => {
   const block = composeBlock(
     [entry()],

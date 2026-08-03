@@ -1,5 +1,16 @@
 # Changelog
 
+## 0.1.16
+
+Running the tool a second time replaced the block instead of adding to it, so anything outside the
+new window vanished. Come back after a fortnight with the default `--days` and the decisions you
+recorded a month ago were gone, with only the diff to warn you. That is a snapshot, and the point
+of the file is accumulated context.
+
+Entries already in the file are now kept when the current search does not return them. Each
+section still holds four, so an old entry only leaves once four newer ones have pushed it out, and
+an entry that comes back again is not duplicated.
+
 ## 0.1.15
 
 Project matching compared names with every separator stripped, so a short name could match inside

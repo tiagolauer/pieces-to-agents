@@ -113,11 +113,81 @@ const renderEntry = (entry: MemoryEntry, filters: BulletFilters): string | null 
   return lines.join('\n')
 }
 
+type RenderedEntry = {
+  readonly category: MemoryCategory
+  readonly day: string
+  readonly body: string
+}
+
+const CATEGORY_BY_TITLE: ReadonlyMap<string, MemoryCategory> = new Map(
+  Object.values(MemoryCategory).map((category) => [CATEGORY_TITLES[category], category]),
+)
+
+const ENTRY_HEADING_PATTERN = /^\*\*(.+)\*\* — (\d{4}-\d{2}-\d{2})$/
+const SECTION_HEADING_PATTERN = /^### (.+)$/
+
+export const parseManagedBlock = (existing: string): ReadonlyArray<RenderedEntry> => {
+  const start = existing.indexOf(MARKER_START)
+  const end = existing.indexOf(MARKER_END)
+  if (start === -1 || end === -1 || end < start) return []
+
+  const entries: RenderedEntry[] = []
+  let category: MemoryCategory | null = null
+  let heading: string | null = null
+  let day = ''
+  let bullets: string[] = []
+
+  const flush = (): void => {
+    if (category === null || heading === null || bullets.length === 0) return
+    entries.push({ category, day, body: [heading, '', ...bullets].join('\n') })
+  }
+
+  for (const line of existing.slice(start, end).split(/\r?\n/)) {
+    const section = SECTION_HEADING_PATTERN.exec(line)
+    if (section) {
+      flush()
+      heading = null
+      bullets = []
+      category = CATEGORY_BY_TITLE.get(section[1] ?? '') ?? null
+      continue
+    }
+
+    const entryHeading = ENTRY_HEADING_PATTERN.exec(line)
+    if (entryHeading) {
+      flush()
+      heading = line
+      day = entryHeading[2] ?? ''
+      bullets = []
+      continue
+    }
+
+    if (heading !== null && line.startsWith('- ')) bullets.push(line)
+  }
+
+  flush()
+  return entries
+}
+
 export const composeBlock = (
   entries: ReadonlyArray<MemoryEntry>,
   metadata: BlockMetadata,
   filters: BulletFilters,
+  previousBlock = '',
 ): string => {
+  const fresh: RenderedEntry[] = []
+  for (const entry of entries) {
+    const body = renderEntry(entry, filters)
+    if (body === null) continue
+    fresh.push({ category: entry.category, day: entry.createdAt.slice(0, 10), body })
+  }
+
+  const seen = new Set(fresh.map((entry) => entry.body.split('\n')[0]))
+  const kept = parseManagedBlock(previousBlock).filter(
+    (entry) => !seen.has(entry.body.split('\n')[0]),
+  )
+
+  const pool = [...fresh, ...kept].sort((left, right) => right.day.localeCompare(left.day))
+
   const sections: string[] = [
     MARKER_START,
     '',
@@ -128,11 +198,10 @@ export const composeBlock = (
   ]
 
   for (const category of Object.values(MemoryCategory)) {
-    const rendered = entries
+    const rendered = pool
       .filter((entry) => entry.category === category)
-      .map((entry) => renderEntry(entry, filters))
-      .filter((block): block is string => block !== null)
       .slice(0, MAX_ENTRIES_PER_CATEGORY)
+      .map((entry) => entry.body)
 
     if (rendered.length === 0) continue
 
