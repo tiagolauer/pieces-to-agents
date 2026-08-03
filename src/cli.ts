@@ -119,6 +119,10 @@ const printDiff = (before: string, after: string): void => {
 
 const confirm = async (question: string): Promise<boolean> => {
   const rl = createInterface({ input: process.stdin, output: process.stdout })
+  rl.once('SIGINT', () => {
+    process.stdout.write('\n')
+    rl.close()
+  })
   try {
     const closedWithoutAnswer = new Promise<string>((resolveClosed) => {
       rl.once('close', () => resolveClosed(''))
