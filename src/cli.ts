@@ -255,8 +255,7 @@ const outcome = await run()
 if (outcome.ok) {
   if (outcome.value.length > 0) process.stdout.write(`${GREEN}${outcome.value}${RESET}\n`)
 } else {
-  const exitCode = EXIT_CODES[outcome.error]
-  const colour = exitCode === 0 ? DIM : RED
+  const colour = outcome.error === SyncFailure.Cancelled ? DIM : RED
   process.stdout.write(`\n${colour}${FAILURE_MESSAGES[outcome.error]}${RESET}\n`)
-  process.exitCode = exitCode
+  process.exitCode = EXIT_CODES[outcome.error]
 }
