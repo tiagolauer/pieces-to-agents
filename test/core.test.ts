@@ -203,6 +203,12 @@ test('isAboutProject matches across accents, spacing and separators', () => {
   assert.equal(isAboutProject('OwlSQL Audit', ['owl sql']), true)
 })
 
+test('isAboutProject does not match a long name buried inside a longer word', () => {
+  assert.equal(isAboutProject('Marconi Radio Session', ['marco']), false)
+  assert.equal(isAboutProject('Legacy Marcosystems Migration', ['marco']), false)
+  assert.equal(isAboutProject('Marco Agenda Rebrand', ['marco']), true)
+})
+
 test('isAboutProject ignores a passing mention in the session body', () => {
   const title = 'KangoOS PR and Contract Negotiation'
   const body =

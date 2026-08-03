@@ -55,9 +55,6 @@ export const categoryFromKeywords = (haystack: string): MemoryCategory | null =>
 
 const MINIMUM_RUN_ON_MATCH_LENGTH = 5
 
-const foldForMatching = (value: string): string =>
-  foldDiacritics(value).replace(/[^a-z0-9]/g, '')
-
 const tokenise = (value: string): ReadonlyArray<string> =>
   foldDiacritics(value)
     .split(/[^a-z0-9]+/)
@@ -75,9 +72,20 @@ const containsTokenSequence = (
   return false
 }
 
+const equalsTokenRun = (haystack: ReadonlyArray<string>, runOnTerm: string): boolean => {
+  for (let start = 0; start < haystack.length; start += 1) {
+    let joined = ''
+    for (let end = start; end < haystack.length; end += 1) {
+      joined += haystack[end]
+      if (joined === runOnTerm) return true
+      if (joined.length >= runOnTerm.length) break
+    }
+  }
+  return false
+}
+
 export const isAboutProject = (sessionTitle: string, terms: ReadonlyArray<string>): boolean => {
   const titleTokens = tokenise(sessionTitle)
-  const runOnTitle = foldForMatching(sessionTitle)
 
   return terms.some((term) => {
     const termTokens = tokenise(term)
@@ -85,7 +93,7 @@ export const isAboutProject = (sessionTitle: string, terms: ReadonlyArray<string
     if (containsTokenSequence(titleTokens, termTokens)) return true
 
     const runOnTerm = termTokens.join('')
-    return runOnTerm.length >= MINIMUM_RUN_ON_MATCH_LENGTH && runOnTitle.includes(runOnTerm)
+    return runOnTerm.length >= MINIMUM_RUN_ON_MATCH_LENGTH && equalsTokenRun(titleTokens, runOnTerm)
   })
 }
 
