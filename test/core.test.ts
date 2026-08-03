@@ -254,6 +254,13 @@ test('isAnchoredToProject drops any bullet that references an identified person'
   assert.equal(isAnchoredToProject(bullet, VOCABULARY), false)
 })
 
+test('isAnchoredToProject matches a multi-word term whose parts are too short alone', () => {
+  const vocabulary: ReadonlySet<string> = new Set(['to-do'])
+
+  assert.equal(isAnchoredToProject('Rewrote the to-do list rendering', vocabulary), true)
+  assert.equal(isAnchoredToProject('Rewrote the list rendering', vocabulary), false)
+})
+
 test('isAnchoredToProject ignores generic folder names as anchors', () => {
   const vocabulary: ReadonlySet<string> = new Set(['owlsql'])
   const bullet = 'Drafted a support email about an SSL error on a client src config'

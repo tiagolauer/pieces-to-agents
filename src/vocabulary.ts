@@ -82,18 +82,32 @@ export const collectProjectVocabulary = async (
   return vocabulary
 }
 
+const containsTermSequence = (
+  tokens: ReadonlyArray<string>,
+  parts: ReadonlyArray<string>,
+): boolean => {
+  if (parts.length === 0 || parts.length > tokens.length) return false
+
+  for (let start = 0; start <= tokens.length - parts.length; start += 1) {
+    if (parts.every((part, offset) => tokens[start + offset] === part)) return true
+  }
+  return false
+}
+
 export const isAnchoredToProject = (
   bullet: string,
   vocabulary: ReadonlySet<string>,
 ): boolean => {
   if (PERSON_REFERENCE_PATTERN.test(bullet)) return false
 
-  const words = new Set(
-    foldDiacritics(bullet).split(SEPARATOR_PATTERN).filter((word) => word.length > 0),
-  )
+  const tokens = foldDiacritics(bullet).split(SEPARATOR_PATTERN).filter((word) => word.length > 0)
+  const words = new Set(tokens)
 
   for (const term of vocabulary) {
     if (words.has(term)) return true
+
+    const parts = term.split(SEPARATOR_PATTERN).filter((part) => part.length > 0)
+    if (parts.length > 1 && containsTermSequence(tokens, parts)) return true
   }
   return false
 }
