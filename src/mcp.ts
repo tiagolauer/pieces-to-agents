@@ -21,7 +21,9 @@ const isRecord = (value: unknown): value is Record<string, unknown> =>
 const isTimeout = (caught: unknown): boolean =>
   isRecord(caught) && (caught.name === 'TimeoutError' || caught.name === 'AbortError')
 
-export const parseEventStreamMessage = (raw: string): unknown => {
+export const parseEventStreamMessage = (raw: string, requestId?: string): unknown => {
+  const messages: unknown[] = []
+
   for (const event of raw.split(/\r?\n\r?\n/)) {
     const dataLines = event
       .split(/\r?\n/)
@@ -30,12 +32,21 @@ export const parseEventStreamMessage = (raw: string): unknown => {
     if (dataLines.length === 0) continue
 
     try {
-      return JSON.parse(dataLines.join('\n'))
+      messages.push(JSON.parse(dataLines.join('\n')))
     } catch {
       continue
     }
   }
-  return null
+
+  if (requestId !== undefined) {
+    const matching = messages.find((message) => isRecord(message) && message.id === requestId)
+    if (matching !== undefined) return matching
+  }
+
+  const response = messages.find(
+    (message) => isRecord(message) && ('result' in message || 'error' in message),
+  )
+  return response ?? messages[0] ?? null
 }
 
 export class McpClient {
@@ -88,9 +99,10 @@ export class McpClient {
     }
     if (this.sessionId) headers['Mcp-Session-Id'] = this.sessionId
 
+    const requestId = crypto.randomUUID()
     const body = JSON.stringify({
       jsonrpc: '2.0',
-      id: crypto.randomUUID(),
+      id: requestId,
       method,
       params,
     })
@@ -122,7 +134,7 @@ export class McpClient {
     try {
       parsed = JSON.parse(raw)
     } catch {
-      parsed = parseEventStreamMessage(raw)
+      parsed = parseEventStreamMessage(raw, requestId)
       if (parsed === null) return err(SyncFailure.McpCallFailed)
     }
 

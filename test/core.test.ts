@@ -476,6 +476,26 @@ test('parseEventStreamMessage returns null when nothing parses', () => {
   assert.equal(parseEventStreamMessage('not an event stream at all'), null)
 })
 
+test('parseEventStreamMessage skips a notification that precedes the response', () => {
+  const raw =
+    'data: {"jsonrpc":"2.0","method":"notifications/message","params":{"level":"info"}}\n\n' +
+    'data: {"jsonrpc":"2.0","id":"42","result":{}}\n\n'
+
+  assert.deepEqual(parseEventStreamMessage(raw), { jsonrpc: '2.0', id: '42', result: {} })
+})
+
+test('parseEventStreamMessage picks the response matching the request id', () => {
+  const raw =
+    'data: {"jsonrpc":"2.0","id":"other","result":{"stale":true}}\n\n' +
+    'data: {"jsonrpc":"2.0","id":"42","result":{"fresh":true}}\n\n'
+
+  assert.deepEqual(parseEventStreamMessage(raw, '42'), {
+    jsonrpc: '2.0',
+    id: '42',
+    result: { fresh: true },
+  })
+})
+
 test('composeBlock keeps an older entry the current search no longer returns', () => {
   const previous = composeBlock(
     [entry({ title: 'Old session', createdAt: '2026-06-01T10:00:00.000Z' })],
