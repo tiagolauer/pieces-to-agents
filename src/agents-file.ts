@@ -1,4 +1,4 @@
-import { readFile, rename, writeFile } from 'node:fs/promises'
+import { readFile, rename, rm, writeFile } from 'node:fs/promises'
 import {
   CATEGORY_TITLES,
   MARKER_END,
@@ -248,13 +248,14 @@ export const readTarget = async (path: string): Promise<Result<string, SyncFailu
 }
 
 export const writeTarget = async (path: string, content: string): Promise<Result<void, SyncFailure>> => {
-  const temporaryPath = `${path}.pieces-tmp`
+  const temporaryPath = `${path}.${process.pid}.pieces-tmp`
 
   try {
     await writeFile(temporaryPath, content, 'utf8')
     await rename(temporaryPath, path)
     return ok(undefined)
   } catch {
+    await rm(temporaryPath, { force: true }).catch(() => undefined)
     return err(SyncFailure.WriteFailed)
   }
 }
