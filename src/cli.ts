@@ -238,7 +238,7 @@ const run = async (): Promise<Result<string, SyncFailure>> => {
   )
   process.stdout.write(`${DIM}Add terms to ${DENY_LIST_FILENAME} to redact them permanently.${RESET}\n\n`)
 
-  const approved = await confirm(`Write ${renderedCount} memories to ${targetName}? [y/N] `)
+  const approved = await confirm(`Write ${targetName} with ${renderedCount} memories? [y/N] `)
   if (!approved) return err(SyncFailure.Cancelled)
 
   const current = await readTarget(targetPath)
