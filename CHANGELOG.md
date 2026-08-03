@@ -1,5 +1,28 @@
 # Changelog
 
+## 0.1.15
+
+Project matching compared names with every separator stripped, so a short name could match inside
+an unrelated word. A repository called `api` matched a session titled "Rapid prototyping", because
+the letters are in there. For a filter whose whole job is keeping other people's work out of your
+file, that is the wrong kind of mistake. Matching now compares whole words first, and only falls
+back to the run-together form for names of five characters or more, which is what makes `owl sql`
+still find "OwlSQL".
+
+A file carrying two managed blocks silently lost one. Only the first pair of markers was
+considered, so the second block was orphaned and never updated again. That is now a conflict, the
+same as a malformed block.
+
+The target file is read again after you approve, and the block is spliced into whatever is on disk
+at that moment. Editing the file by hand while the prompt waits no longer loses the edit.
+
+Cancelling now exits non-zero. It exited zero before, which meant
+`pieces-to-agents && git commit` committed after you declined the diff.
+
+The README gained a section saying plainly that the diff is a trust boundary. Everything in the
+generated block came from text that appeared on a screen, and it lands in a file an agent treats
+as instructions. The filters look for private data, not hostile data.
+
 ## 0.1.14
 
 A long window used to fail outright. `annotations_batch_snapshot` accepts at most 100 identifiers,

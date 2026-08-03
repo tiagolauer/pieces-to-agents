@@ -141,6 +141,21 @@ Five things stand between your memory and the file:
 
 Copy `.pieces-to-agents-ignore.example` to get started. The file is git-ignored.
 
+### The diff is a trust boundary
+
+Everything in the generated block came from text that appeared on your screen, and it ends up in a
+file your agent treats as instructions. Nothing in between establishes that any of it is
+trustworthy.
+
+A web page, a pull request description, a document someone sent you: if PiecesOS saw it, a
+summary can quote it, and this tool can copy that quote into the file your agent reads next.
+Text written to be obeyed by an agent survives that trip intact. The filters here look for
+private data, not for hostile data, and they cannot tell the difference between a decision you
+made and a sentence that was written to be found.
+
+So read the diff as though it came from a stranger, because part of it did. This is the same
+reason the approval step has no bypass flag.
+
 None of this is airtight. On a real repository with four months of history, these filters took
 off-topic bullets from twenty percent of the output down to under four, and the survivors were
 mentions of a neighbouring project that shared the same work sessions. Adding that project's name
@@ -195,8 +210,8 @@ search ceiling is 100 hits per category, and a longer window pulls in older sess
 for the same per-category slots, so a year can surface fewer entries than three months. Try a few
 windows rather than assuming the widest is best.
 
-The file is read before the prompt and written after it. Editing the target by hand while the
-confirmation is waiting means your edit is overwritten.
+Cancelling exits non-zero, so `pieces-to-agents && something-else` will not run the second command
+when you decline the diff.
 
 Project matching reads the session title only. Pieces names sessions after what you worked on,
 so this is usually the strongest signal available, but a session with a vague title is dropped
@@ -226,8 +241,8 @@ instead, because PowerShell swallows the `--` separator that `npm run` needs:
 npx tsx src/cli.ts --days 30 --alias "my product"
 ```
 
-Ten tests cover the parts that would fail quietly: splicing the managed block, redaction, the
-project filter and composing the output.
+The tests cover the parts that would fail quietly: splicing the managed block, redaction, the
+project and vocabulary filters, composing the output, and parsing an SSE-framed reply.
 
 ## Roadmap
 

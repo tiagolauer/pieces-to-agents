@@ -159,6 +159,11 @@ export const spliceManagedBlock = (
     return err(SyncFailure.ManagedBlockConflict)
   }
 
+  const duplicated =
+    existing.lastIndexOf(MARKER_START) !== startIndex ||
+    existing.lastIndexOf(MARKER_END) !== endIndex
+  if (duplicated) return err(SyncFailure.ManagedBlockConflict)
+
   const before = existing.slice(0, startIndex)
   const after = existing.slice(endIndex + MARKER_END.length)
   return ok(`${before}${block}${after}`)

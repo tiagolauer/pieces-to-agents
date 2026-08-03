@@ -23,11 +23,11 @@ import { DENY_LIST_FILENAME, loadDenyList } from './redact.ts'
 import { collectProjectVocabulary } from './vocabulary.ts'
 
 const useColor = process.stdout.isTTY === true
-const RESET = useColor ? '[0m' : ''
-const RED = useColor ? '[31m' : ''
-const GREEN = useColor ? '[32m' : ''
-const DIM = useColor ? '[2m' : ''
-const BOLD = useColor ? '[1m' : ''
+const RESET = useColor ? '\x1b[0m' : ''
+const RED = useColor ? '\x1b[31m' : ''
+const GREEN = useColor ? '\x1b[32m' : ''
+const DIM = useColor ? '\x1b[2m' : ''
+const BOLD = useColor ? '\x1b[1m' : ''
 
 const USAGE = `Usage: pieces-to-agents [options]
 
@@ -85,7 +85,7 @@ const EXIT_CODES: Readonly<Record<SyncFailure, number>> = {
   [SyncFailure.ManagedBlockConflict]: 7,
   [SyncFailure.ReadFailed]: 8,
   [SyncFailure.WriteFailed]: 9,
-  [SyncFailure.Cancelled]: 0,
+  [SyncFailure.Cancelled]: 1,
 }
 
 const findRepositoryRoot = async (startingPath: string): Promise<Result<string, SyncFailure>> => {
@@ -172,7 +172,7 @@ const run = async (): Promise<Result<string, SyncFailure>> => {
   if (windowDays === null) return err(SyncFailure.InvalidDays)
 
   const project = values.project ?? basename(repositoryRoot.value)
-  const targetName = resolveTargetFile(values.target ?? TargetFile.Agents)
+  const targetName = resolveTargetFile(values.target)
   if (targetName === null) return err(SyncFailure.UnknownTarget)
 
   const targetPath = join(repositoryRoot.value, targetName)
@@ -236,7 +236,14 @@ const run = async (): Promise<Result<string, SyncFailure>> => {
   const approved = await confirm(`Write ${renderedCount} memories to ${targetName}? [y/N] `)
   if (!approved) return err(SyncFailure.Cancelled)
 
-  const written = await writeTarget(targetPath, updated.value)
+  const current = await readTarget(targetPath)
+  if (!current.ok) return current
+
+  const merged =
+    current.value === existing.value ? updated : spliceManagedBlock(current.value, block)
+  if (!merged.ok) return merged
+
+  const written = await writeTarget(targetPath, merged.value)
   if (!written.ok) return written
 
   return ok(`Wrote ${targetName} with ${renderedCount} memories.`)

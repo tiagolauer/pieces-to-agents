@@ -172,6 +172,27 @@ test('isAboutProject keeps sessions whose title names the project or an alias', 
   assert.equal(isAboutProject('Debugged the ptha extractor', ['pieces-to-agents', 'ptha']), true)
 })
 
+test('isAboutProject does not match a short name buried inside a word', () => {
+  assert.equal(isAboutProject('Rapid prototyping session', ['api']), false)
+  assert.equal(isAboutProject('Scanning the docs', ['can']), false)
+  assert.equal(isAboutProject('A word about hardware', ['war']), false)
+})
+
+test('isAboutProject still matches a short name standing on its own', () => {
+  assert.equal(isAboutProject('Reworked the api layer', ['api']), true)
+  assert.equal(isAboutProject('api-gateway cleanup', ['api']), true)
+})
+
+test('spliceManagedBlock refuses a file carrying two managed blocks', () => {
+  const existing =
+    `${MARKER_START}\nFIRST\n${MARKER_END}\n\n${MARKER_START}\nSECOND\n${MARKER_END}\n`
+  const result = spliceManagedBlock(existing, `${MARKER_START}\nNEW\n${MARKER_END}`)
+
+  assert.equal(result.ok, false)
+  if (result.ok) return
+  assert.equal(result.error, SyncFailure.ManagedBlockConflict)
+})
+
 test('isAboutProject rejects sessions titled after other work', () => {
   assert.equal(isAboutProject('Senior C# Prep and Architecture', ['pieces-to-agents']), false)
 })
