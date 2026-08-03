@@ -116,8 +116,8 @@ export class McpClient {
         signal: AbortSignal.timeout(CALL_TIMEOUT_MS),
       })
     } catch (caught) {
-      if (method === 'initialize') return err(SyncFailure.PiecesOsUnreachable)
-      return err(isTimeout(caught) ? SyncFailure.McpTimeout : SyncFailure.McpCallFailed)
+      if (isTimeout(caught)) return err(SyncFailure.McpTimeout)
+      return err(method === 'initialize' ? SyncFailure.PiecesOsUnreachable : SyncFailure.McpCallFailed)
     }
 
     if (!response.ok) {
