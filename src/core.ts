@@ -11,6 +11,8 @@ export const err = <E>(error: E): Result<never, E> => ({ ok: false, error })
 export const foldDiacritics = (value: string): string =>
   value.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '')
 
+export const stripByteOrderMark = (raw: string): string => raw.replace(/^\ufeff/, '')
+
 export enum MemoryCategory {
   ArchitectureDecisions = 'architecture-decisions',
   ResolvedBugs = 'resolved-bugs',
@@ -106,7 +108,7 @@ const FALLBACK_VERSION = '0.0.0'
 const readOwnVersion = async (): Promise<string> => {
   try {
     const raw = await readFile(new URL('../package.json', import.meta.url), 'utf8')
-    const manifest: unknown = JSON.parse(raw)
+    const manifest: unknown = JSON.parse(stripByteOrderMark(raw))
     if (typeof manifest !== 'object' || manifest === null) return FALLBACK_VERSION
     const version = (manifest as { version?: unknown }).version
     return typeof version === 'string' ? version : FALLBACK_VERSION

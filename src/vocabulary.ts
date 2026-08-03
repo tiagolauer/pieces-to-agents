@@ -1,6 +1,6 @@
 import { readFile, readdir } from 'node:fs/promises'
 import { join } from 'node:path'
-import { foldDiacritics } from './core.ts'
+import { foldDiacritics, stripByteOrderMark } from './core.ts'
 
 const MINIMUM_TERM_LENGTH = 3
 const IGNORED_ENTRIES = new Set(['node_modules', '.git', 'dist', 'build', '.github', 'coverage'])
@@ -32,7 +32,7 @@ const addTerm = (into: Set<string>, raw: string): void => {
 const readPackageTerms = async (repositoryRoot: string, into: Set<string>): Promise<void> => {
   try {
     const raw = await readFile(join(repositoryRoot, 'package.json'), 'utf8')
-    const parsed: unknown = JSON.parse(raw)
+    const parsed: unknown = JSON.parse(stripByteOrderMark(raw))
     if (typeof parsed !== 'object' || parsed === null) return
 
     const manifest = parsed as {

@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict'
-import { mkdir, mkdtemp, readFile } from 'node:fs/promises'
+import { mkdir, mkdtemp, readFile, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { test } from 'node:test'
@@ -283,6 +283,21 @@ test('collectProjectVocabulary skips build artifacts one level down', async () =
   assert.equal(vocabulary.has('frontend'), true)
   assert.equal(vocabulary.has('widgets'), true)
   assert.equal(vocabulary.has('myproj'), true)
+})
+
+test('collectProjectVocabulary reads a package.json that starts with a BOM', async () => {
+  const root = await mkdtemp(join(tmpdir(), 'p2a-bom-'))
+  await writeFile(
+    join(root, 'package.json'),
+    '\uFEFF{"name":"widget-factory","dependencies":{"knexjs-fork":"1.0.0"}}',
+    'utf8',
+  )
+
+  const vocabulary = await collectProjectVocabulary(root, ['myproj'])
+
+  assert.equal(vocabulary.has('widget'), true)
+  assert.equal(vocabulary.has('factory'), true)
+  assert.equal(vocabulary.has('knexjs'), true)
 })
 
 test('isAnchoredToProject drops bullets from a mixed session', () => {
