@@ -228,7 +228,7 @@ The bullet filters read English. Something that happened is recognised by an ope
 verb, work still to do by an English imperative, and a title is split on the word "and". PiecesOS
 wrote every summary seen during development in English, whatever language the work itself was in,
 so this normally costs nothing. If your summaries arrive in another language, every bullet fails
-the tense check and the run ends reporting no project match.
+the tense check and the run ends saying every line was filtered out.
 
 ## Development
 
