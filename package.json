@@ -1,6 +1,6 @@
 {
   "name": "pieces-to-agents",
-  "version": "0.1.16",
+  "version": "0.1.17",
   "description": "Turn your Pieces Long-Term Memory into an AGENTS.md your coding agents can read.",
   "license": "MIT",
   "author": "Tiago Lauer",
