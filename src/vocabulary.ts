@@ -9,20 +9,24 @@ const SEPARATOR_PATTERN = /[^a-z0-9]+/
 const PERSON_REFERENCE_PATTERN = /pieces:\/\/persons\//i
 
 const GENERIC_TERMS: ReadonlySet<string> = new Set([
-  'api', 'app', 'apps', 'assets', 'bench', 'benchmark', 'bin', 'build', 'cli', 'common', 'config',
-  'core', 'coverage', 'data', 'dist', 'doc', 'docs', 'e2e', 'example', 'examples', 'fixture',
-  'fixtures', 'helper', 'helpers', 'index', 'integration', 'lib', 'log', 'logs', 'main', 'memory',
-  'mock', 'mocks', 'modules', 'node', 'output', 'package', 'public', 'readme', 'scripts', 'server',
-  'shared', 'spec', 'specs', 'src', 'temp', 'test', 'tests', 'tmp', 'tools', 'types', 'unit',
-  'utils', 'web', 'www',
+  'agent', 'agents', 'api', 'app', 'apps', 'assets', 'bench', 'benchmark', 'bin', 'build', 'claude',
+  'cli', 'codex', 'common', 'component', 'components', 'config', 'constants', 'context', 'copilot',
+  'core', 'coverage', 'cursor', 'data', 'dist', 'doc', 'docs', 'e2e', 'example', 'examples',
+  'fixture', 'fixtures', 'gemini', 'helper', 'helpers', 'hook', 'hooks', 'index', 'integration',
+  'layout', 'layouts', 'lib', 'log', 'logs', 'main', 'memory', 'middleware', 'migration',
+  'migrations', 'mock', 'mocks', 'model', 'models', 'modules', 'node', 'output', 'package', 'page',
+  'pages', 'provider', 'providers', 'public', 'readme', 'route', 'routes', 'schema', 'schemas',
+  'scripts', 'server', 'service', 'services', 'shared', 'spec', 'specs', 'src', 'state', 'store',
+  'style', 'styles', 'temp', 'test', 'tests', 'tmp', 'tools', 'types', 'unit', 'utils', 'view',
+  'views', 'web', 'www',
 ])
 
 const keep = (term: string): boolean =>
   term.length >= MINIMUM_TERM_LENGTH && !GENERIC_TERMS.has(term)
 
-const addTerm = (into: Set<string>, raw: string): void => {
+const addTerm = (into: Set<string>, raw: string, alwaysKeepWhole = false): void => {
   const folded = foldDiacritics(raw).trim()
-  if (keep(folded)) into.add(folded)
+  if (folded.length > 0 && (alwaysKeepWhole || keep(folded))) into.add(folded)
 
   for (const part of folded.split(SEPARATOR_PATTERN)) {
     if (keep(part)) into.add(part)
@@ -58,7 +62,7 @@ export const collectProjectVocabulary = async (
 ): Promise<ReadonlySet<string>> => {
   const vocabulary = new Set<string>()
 
-  for (const term of projectTerms) addTerm(vocabulary, term)
+  for (const term of projectTerms) addTerm(vocabulary, term, true)
 
   try {
     const entries = await readdir(repositoryRoot, { withFileTypes: true })
