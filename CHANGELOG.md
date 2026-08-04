@@ -2,7 +2,7 @@
 
 ## 0.1.17
 
-An end-to-end audit of the whole pipeline. Twelve fixes, the first one a real leak.
+An end-to-end audit of the whole pipeline. Thirteen fixes, the first one a real leak.
 
 The deny-list did not reach entries kept from previous runs. 0.1.16 started carrying forward
 entries the current search no longer returns, and carried them verbatim, so a term added to
@@ -10,13 +10,23 @@ entries the current search no longer returns, and carried them verbatim, so a te
 on every run that the deny-list redacts permanently. Kept bullets that mention a denied term are
 now dropped, kept headings are redacted, and a kept entry with no clean bullet left disappears.
 
-Two holes in the anchor vocabulary. The ignore list only applied at the repository root, so a
+Three holes in the anchor vocabulary. The ignore list only applied at the repository root, so a
 first-level directory could contribute `dist`, `coverage` or `node_modules` children as anchors,
 and a bullet from another project mentioning "dist" passed the filter that exists to keep it out.
 Children now go through the same ignore list, and those names joined the generic terms. Separately,
 a UTF-8 BOM at the start of the target repository's `package.json` made `JSON.parse` throw into an
 empty catch, silently dropping the package name and every dependency from the vocabulary — the
 same failure 0.1.2 fixed for this repository itself. Both JSON reads now strip a leading BOM.
+
+The third hole was self-inflicted. The vocabulary is built from the names of the files and
+directories at the repository root, so a repository already carrying `CLAUDE.md` or `AGENTS.md` —
+the very files this tool writes — contributed `claude` and `agents` as anchors. Every memory comes
+from a session with a coding assistant, so almost any bullet naming Claude then read as project
+work, and installing the desktop app or wiring it to a Trello board landed in the file. Assistant
+names and the framework vocabulary every project shares — `model`, `page`, `route`, `component`,
+`hook`, `store`, `schema`, `migration` and the rest — are now generic terms. A project whose own
+name is one of those keeps it: `--project` and `--alias` are added whole, whatever the generic
+list says.
 
 Project matching, tightened in both directions. The run-together fallback searched for the term as
 a substring, so a project called `marco` matched a session titled "Marconi Radio"; the run-on form

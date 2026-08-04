@@ -681,3 +681,37 @@ test('composeBlock output round-trips through spliceManagedBlock', () => {
   if (!second.ok) return
   assert.equal(second.value, first.value)
 })
+
+test('collectProjectVocabulary does not anchor on agent files or framework folders', async () => {
+  const root = await mkdtemp(join(tmpdir(), 'p2a-generic-'))
+  await mkdir(join(root, 'src', 'models'), { recursive: true })
+  await mkdir(join(root, 'src', 'components'), { recursive: true })
+  await writeFile(join(root, 'CLAUDE.md'), '# rules', 'utf8')
+  await writeFile(join(root, 'AGENTS.md'), '# rules', 'utf8')
+
+  const vocabulary = await collectProjectVocabulary(root, ['vivarium'])
+
+  assert.equal(vocabulary.has('claude'), false)
+  assert.equal(vocabulary.has('agents'), false)
+  assert.equal(vocabulary.has('models'), false)
+  assert.equal(vocabulary.has('components'), false)
+  assert.equal(vocabulary.has('vivarium'), true)
+
+  assert.equal(
+    isAnchoredToProject('Signed in to the Claude desktop application on Windows', vocabulary),
+    false,
+  )
+  assert.equal(
+    isAnchoredToProject('Read news coverage about an open-source model release', vocabulary),
+    false,
+  )
+  assert.equal(isAnchoredToProject('Fixed the vivarium switchWorld race', vocabulary), true)
+})
+
+test('collectProjectVocabulary keeps a project term that reads as generic', async () => {
+  const root = await mkdtemp(join(tmpdir(), 'p2a-generic-name-'))
+
+  const vocabulary = await collectProjectVocabulary(root, ['agents'])
+
+  assert.equal(vocabulary.has('agents'), true)
+})
