@@ -1,5 +1,22 @@
 # Changelog
 
+## 0.1.18
+
+The deny-list only removes names it has already been given, so the first leak of any name rode
+through every filter and had to be caught by eye in the diff. Capitalized words in the added
+lines that belong to neither the project vocabulary nor a list of well-known technology names
+are now highlighted in yellow inside the diff and listed once under it as possible proper
+nouns, with a pointer at the deny-list. Consecutive unknown words arrive as a single candidate,
+ready to paste. Nothing is dropped automatically, there is no new flag, and zero candidates
+print nothing.
+
+The detector is a capitalization heuristic, not a model, so it costs no dependency and no
+download. It reads bullets only and leans on English capitalization: sentence-initial words and
+all-caps acronyms are skipped, and dates, platforms and assistant names sit on a stop list. A
+lowercase name, an all-caps codename or a name inside a session title is not flagged, and the
+README says so under Known limits. On a run against real memory it flagged exactly one term, a
+neighbouring project's name — the same one 0.1.3 had to deny by hand.
+
 ## 0.1.17
 
 An end-to-end audit of the whole pipeline. Thirteen fixes, the first one a real leak.
