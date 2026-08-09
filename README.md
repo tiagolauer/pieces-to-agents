@@ -125,7 +125,7 @@ standing in. That includes your employer's internal code, other people's names, 
 AI-written profile of you. Putting any of it in a file you commit is a leak, so the tool assumes
 the worst by default.
 
-Five things stand between your memory and the file:
+Six things stand between your memory and the file:
 
 1. Nothing is written until you approve a diff. This is the control that actually matters, and
    it has no bypass flag.
@@ -144,6 +144,11 @@ Five things stand between your memory and the file:
    employers and client codenames go in `.pieces-to-agents-ignore`, one per line. A bullet that
    mentions one of those terms is removed entirely rather than masked, because the sentence
    around a name is usually about that name.
+6. Capitalized words that belong to neither your project vocabulary nor a list of well-known
+   technology names are highlighted in the diff and listed under it as possible proper nouns.
+   The deny-list only knows names you have already told it; this points at the ones you have
+   not. Nothing is removed automatically — the list exists so a name you never expected to see
+   jumps out of the diff instead of hiding in it.
 
 Copy `.pieces-to-agents-ignore.example` to get started. The file is git-ignored.
 
@@ -219,6 +224,11 @@ windows rather than assuming the widest is best.
 Cancelling exits non-zero, so `pieces-to-agents && something-else` will not run the second command
 when you decline the diff.
 
+The proper-noun hints read the bullets, not the headings, and they lean on English
+capitalization. A private name written in lowercase, an all-caps codename that looks like an
+acronym, or a name inside a session title will not be flagged. The hints narrow the gap the
+deny-list leaves open; they do not close it, and the diff is still the control that matters.
+
 Project matching reads the session title only. Pieces names sessions after what you worked on,
 so this is usually the strongest signal available, but a session with a vague title is dropped
 even when its content belongs to your project. `--alias` is the way out, and it takes any name
@@ -254,7 +264,7 @@ project and vocabulary filters, composing the output, and parsing an SSE-framed 
 
 Nothing here is promised. Roughly in order of how much I want it:
 
-- Local NER to catch proper nouns the deny-list was never told about
+- A real NER model behind an opt-in flag, if the capitalization heuristic proves too blunt
 - A watch mode, or a commit hook
 - One managed block per package in a monorepo
 - Scoping by absolute project path, if Pieces ever exposes that filter over MCP

@@ -21,6 +21,7 @@ import {
   searchLimitForWindow,
   type MemoryEntry,
 } from '../src/memory.ts'
+import { detectCandidateEntities } from '../src/entities.ts'
 import { parseEventStreamMessage } from '../src/mcp.ts'
 import { redact } from '../src/redact.ts'
 import { collectProjectVocabulary, isAnchoredToProject } from '../src/vocabulary.ts'
@@ -714,4 +715,62 @@ test('collectProjectVocabulary keeps a project term that reads as generic', asyn
   const vocabulary = await collectProjectVocabulary(root, ['agents'])
 
   assert.equal(vocabulary.has('agents'), true)
+})
+
+test('detectCandidateEntities flags an unknown mid-sentence proper noun', () => {
+  const candidates = detectCandidateEntities(
+    '- Chose PostgreSQL over Hostinger for the demo deployment',
+    VOCABULARY,
+  )
+
+  assert.deepEqual(candidates, ['Hostinger'])
+})
+
+test('detectCandidateEntities groups consecutive unknown words into one candidate', () => {
+  const candidates = detectCandidateEntities(
+    '- Met with Marcos Silva about the parser rollout',
+    VOCABULARY,
+  )
+
+  assert.deepEqual(candidates, ['Marcos Silva'])
+})
+
+test('detectCandidateEntities skips the sentence-initial word', () => {
+  const candidates = detectCandidateEntities('- Fixed the parser after the crash', VOCABULARY)
+
+  assert.deepEqual(candidates, [])
+})
+
+test('detectCandidateEntities skips acronyms stop terms and vocabulary', () => {
+  const candidates = detectCandidateEntities(
+    '- Parsed the JWT on Windows after GitHub rejected the PostgreSQL login',
+    VOCABULARY,
+  )
+
+  assert.deepEqual(candidates, [])
+})
+
+test('detectCandidateEntities keeps a name with internal capitals or digits', () => {
+  const candidates = detectCandidateEntities(
+    '- Debugged the parser against Auth0 and OwlSQL fixtures',
+    VOCABULARY,
+  )
+
+  assert.deepEqual(candidates, ['Auth0', 'OwlSQL'])
+})
+
+test('detectCandidateEntities reads bullets only and reports each name once', () => {
+  const candidates = detectCandidateEntities(
+    [
+      '### Architecture decisions',
+      '',
+      '**Hostinger Migration** — 2026-08-01',
+      '',
+      '- Moved the demo parser away from Hostinger',
+      '- Confirmed with Hostinger support that the demo plan expired',
+    ].join('\n'),
+    VOCABULARY,
+  )
+
+  assert.deepEqual(candidates, ['Hostinger'])
 })
