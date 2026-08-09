@@ -3,7 +3,7 @@ import { stat } from 'node:fs/promises'
 import { basename, dirname, join, resolve } from 'node:path'
 import { createInterface } from 'node:readline/promises'
 import { parseArgs } from 'node:util'
-import { diffLines } from 'diff'
+import { diffLines, type Change } from 'diff'
 import {
   CLIENT_VERSION,
   DEFAULT_WINDOW_DAYS,
@@ -21,6 +21,7 @@ import { collectMemories } from './memory.ts'
 import { composeBlock, readTarget, spliceManagedBlock, writeTarget } from './agents-file.ts'
 import { DENY_LIST_FILENAME, loadDenyList } from './redact.ts'
 import { collectProjectVocabulary } from './vocabulary.ts'
+import { detectCandidateEntities } from './entities.ts'
 
 const useColor = process.stdout.isTTY === true
 const RESET = useColor ? '\x1b[0m' : ''
@@ -28,6 +29,7 @@ const RED = useColor ? '\x1b[31m' : ''
 const GREEN = useColor ? '\x1b[32m' : ''
 const DIM = useColor ? '\x1b[2m' : ''
 const BOLD = useColor ? '\x1b[1m' : ''
+const YELLOW = useColor ? '\x1b[33m' : ''
 
 const USAGE = `Usage: pieces-to-agents [options]
 
@@ -105,14 +107,22 @@ const findRepositoryRoot = async (startingPath: string): Promise<Result<string, 
   }
 }
 
-const printDiff = (before: string, after: string): void => {
-  for (const part of diffLines(before, after)) {
+const highlightTerms = (line: string, terms: ReadonlyArray<string>): string => {
+  if (!useColor) return line
+  let output = line
+  for (const term of terms) output = output.split(term).join(`${YELLOW}${term}${GREEN}`)
+  return output
+}
+
+const printDiff = (parts: ReadonlyArray<Change>, highlights: ReadonlyArray<string>): void => {
+  for (const part of parts) {
     const marker = part.added ? '+' : part.removed ? '-' : ' '
     const color = part.added ? GREEN : part.removed ? RED : DIM
     if (!part.added && !part.removed) continue
 
     for (const line of part.value.replace(/\n$/, '').split('\n')) {
-      process.stdout.write(`${color}${marker} ${line}${RESET}\n`)
+      const rendered = part.added ? highlightTerms(line, highlights) : line
+      process.stdout.write(`${color}${marker} ${rendered}${RESET}\n`)
     }
   }
 }
@@ -230,8 +240,19 @@ const run = async (): Promise<Result<string, SyncFailure>> => {
 
   if (updated.value === existing.value) return ok(`${targetName} is already up to date.`)
 
+  const parts = diffLines(existing.value, updated.value)
+  const addedText = parts.filter((part) => part.added).map((part) => part.value).join('')
+  const candidates = detectCandidateEntities(addedText, vocabulary)
+
   process.stdout.write(`${BOLD}Proposed changes to ${targetName}:${RESET}\n\n`)
-  printDiff(existing.value, updated.value)
+  printDiff(parts, candidates)
+
+  if (candidates.length > 0) {
+    process.stdout.write(`\n${YELLOW}Possible proper nouns:${RESET} ${candidates.join(', ')}\n`)
+    process.stdout.write(
+      `${DIM}If any of these is private, add it to ${DENY_LIST_FILENAME} and run again.${RESET}\n`,
+    )
+  }
 
   process.stdout.write(
     `\n${BOLD}Review carefully.${RESET} Memory can contain names, employers and private notes.\n`,
