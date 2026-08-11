@@ -1,5 +1,20 @@
 # Changelog
 
+## Unreleased
+
+Aliases were applied only after search results came back, while every MCP query still used the
+primary project name. A session named solely after an alias could therefore never reach the
+filter that accepted it. Every project name and alias now runs through both search strategies,
+with an end-to-end MCP regression test covering the case.
+
+The deny-list loader treated every read failure as though the file did not exist. An existing
+`.pieces-to-agents-ignore` with bad permissions could silently disable the user's private-term
+filter. Only a genuinely missing file is empty now; every other read error aborts before memory
+is fetched or written and exits with its own diagnostic.
+
+CI now runs the supported Node.js versions on Windows as well as Ubuntu. The byte-order-mark
+shell check remains on Linux, while type checking, tests and the build run on both platforms.
+
 ## 0.1.18
 
 The deny-list only removes names it has already been given, so the first leak of any name rode

@@ -1,5 +1,6 @@
 import { readFile } from 'node:fs/promises'
 import { join } from 'node:path'
+import { SyncFailure, err, ok, type Result } from './core.ts'
 
 export const DENY_LIST_FILENAME = '.pieces-to-agents-ignore'
 
@@ -70,14 +71,25 @@ export const redact = (text: string, deniedTerms: ReadonlyArray<string> = []): s
   return output
 }
 
-export const loadDenyList = async (repositoryRoot: string): Promise<ReadonlyArray<string>> => {
+export const loadDenyList = async (
+  repositoryRoot: string,
+): Promise<Result<ReadonlyArray<string>, SyncFailure>> => {
   try {
     const raw = await readFile(join(repositoryRoot, DENY_LIST_FILENAME), 'utf8')
-    return raw
-      .split(/\r?\n/)
-      .map((line) => line.trim())
-      .filter((line) => line.length > 0 && !line.startsWith('#'))
-  } catch {
-    return []
+    return ok(
+      raw
+        .split(/\r?\n/)
+        .map((line) => line.trim())
+        .filter((line) => line.length > 0 && !line.startsWith('#')),
+    )
+  } catch (caught) {
+    if (isMissingFile(caught)) return ok([])
+    return err(SyncFailure.DenyListReadFailed)
   }
 }
+
+const isMissingFile = (caught: unknown): boolean =>
+  typeof caught === 'object' &&
+  caught !== null &&
+  'code' in caught &&
+  (caught as { code?: unknown }).code === 'ENOENT'

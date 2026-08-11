@@ -1,5 +1,7 @@
 import assert from 'node:assert/strict'
 import { mkdir, mkdtemp, readFile, writeFile } from 'node:fs/promises'
+import { createServer, type IncomingMessage } from 'node:http'
+import type { AddressInfo } from 'node:net'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { test } from 'node:test'
@@ -17,13 +19,14 @@ import {
 } from '../src/core.ts'
 import {
   categoryFromKeywords,
+  collectMemories,
   isAboutProject,
   searchLimitForWindow,
   type MemoryEntry,
 } from '../src/memory.ts'
 import { detectCandidateEntities } from '../src/entities.ts'
-import { parseEventStreamMessage } from '../src/mcp.ts'
-import { redact } from '../src/redact.ts'
+import { McpClient, parseEventStreamMessage } from '../src/mcp.ts'
+import { DENY_LIST_FILENAME, loadDenyList, redact } from '../src/redact.ts'
 import { collectProjectVocabulary, isAnchoredToProject } from '../src/vocabulary.ts'
 
 const VOCABULARY: ReadonlySet<string> = new Set([
@@ -41,6 +44,12 @@ const entry = (overrides: Partial<MemoryEntry> = {}): MemoryEntry => ({
   text: '### Decisions\n- Chose PostgreSQL over MongoDB for relational integrity\n- Rejected GraphQL to keep the surface small',
   ...overrides,
 })
+
+const readRequestBody = async (request: IncomingMessage): Promise<string> => {
+  const chunks: Buffer[] = []
+  for await (const chunk of request) chunks.push(Buffer.from(chunk))
+  return Buffer.concat(chunks).toString('utf8')
+}
 
 test('spliceManagedBlock appends the block and preserves handwritten content', () => {
   const existing = '# My Project\n\nHandwritten notes.\n'
@@ -146,6 +155,17 @@ test('redact removes denied terms regardless of case', () => {
   assert.doesNotMatch(scrubbed, /AcmeCorp/i)
 })
 
+test('loadDenyList allows a missing file but rejects one it cannot read', async () => {
+  const root = await mkdtemp(join(tmpdir(), 'p2a-deny-list-'))
+
+  const missing = await loadDenyList(root)
+  assert.deepEqual(missing, { ok: true, value: [] })
+
+  await mkdir(join(root, DENY_LIST_FILENAME))
+  const unreadable = await loadDenyList(root)
+  assert.deepEqual(unreadable, { ok: false, error: SyncFailure.DenyListReadFailed })
+})
+
 test('composeBlock emits bullets under the category heading', () => {
   const block = composeBlock(
     [entry()],
@@ -228,6 +248,85 @@ test('searchLimitForWindow asks for more the further back you look', () => {
   assert.equal(searchLimitForWindow(90), 56)
   assert.equal(searchLimitForWindow(365), 100)
   assert.equal(searchLimitForWindow(10_000), 100)
+})
+
+test('collectMemories searches aliases as well as the primary project name', async () => {
+  const queries: string[] = []
+  const server = createServer(async (request, response) => {
+    const body = JSON.parse(await readRequestBody(request)) as {
+      id?: string
+      method?: string
+      params?: { name?: string; arguments?: { query?: string } }
+    }
+
+    response.setHeader('Content-Type', 'application/json')
+    if (body.method === 'notifications/initialized') {
+      response.statusCode = 202
+      response.end()
+      return
+    }
+
+    let payload: unknown = {}
+    if (body.method === 'tools/call') {
+      const tool = body.params?.name
+      const query = body.params?.arguments?.query ?? ''
+      if (query.length > 0) queries.push(query)
+
+      if (tool === 'workstream_summaries_vector_search') payload = { results: [] }
+      if (tool === 'workstream_summaries_full_text_search') {
+        payload = query.includes('ptha')
+          ? { results: [{ summary: { id: 'summary-1' } }] }
+          : { results: [] }
+      }
+      if (tool === 'workstream_summaries_batch_snapshot') {
+        payload = {
+          items: [{
+            id: 'summary-1',
+            name: 'PTHA parser refactor',
+            created: { value: '2026-08-11T10:00:00.000Z' },
+            annotations: { indices: { 'annotation-1': {} } },
+          }],
+        }
+      }
+      if (tool === 'annotations_batch_snapshot') {
+        payload = {
+          items: [{ id: 'annotation-1', type: 'SUMMARY', text: '- Rewrote the PTHA parser' }],
+        }
+      }
+    }
+
+    response.end(JSON.stringify({
+      jsonrpc: '2.0',
+      id: body.id,
+      result: body.method === 'tools/call'
+        ? { content: [{ type: 'text', text: JSON.stringify(payload) }] }
+        : {},
+    }))
+  })
+
+  await new Promise<void>((resolve) => server.listen(0, '127.0.0.1', resolve))
+  try {
+    const { port } = server.address() as AddressInfo
+    const connected = await McpClient.connect(`http://127.0.0.1:${port}`)
+    assert.equal(connected.ok, true)
+    if (!connected.ok) return
+
+    const result = await collectMemories(connected.value, {
+      project: 'pieces-to-agents',
+      aliases: ['ptha'],
+      since: new Date(0),
+      windowDays: 14,
+    })
+
+    assert.equal(result.ok, true)
+    if (!result.ok) return
+    assert.equal(result.value[0]?.title, 'PTHA parser refactor')
+    assert.equal(queries.some((query) => query.includes('ptha')), true)
+  } finally {
+    await new Promise<void>((resolve, reject) => {
+      server.close((error) => error ? reject(error) : resolve())
+    })
+  }
 })
 
 test('categoryFromKeywords picks the category the text talks about most', () => {
