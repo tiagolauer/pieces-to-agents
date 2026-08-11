@@ -8,11 +8,12 @@ on:
 
 jobs:
   verify:
-    runs-on: ubuntu-latest
+    runs-on: ${{ matrix.os }}
 
     strategy:
       fail-fast: false
       matrix:
+        os: [ubuntu-latest, windows-latest]
         node: ['20.11', '22', '24']
 
     steps:
@@ -26,6 +27,7 @@ jobs:
       - run: npm ci
 
       - name: Reject byte order marks
+        if: runner.os == 'Linux'
         run: |
           found=$(git ls-files -z | xargs -0 grep -lI $'\xEF\xBB\xBF' 2>/dev/null || true)
           if [ -n "$found" ]; then

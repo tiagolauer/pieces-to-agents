@@ -63,6 +63,7 @@ export enum SyncFailure {
   InvalidDays = 'invalid-days',
   ManagedBlockConflict = 'managed-block-conflict',
   ReadFailed = 'read-failed',
+  DenyListReadFailed = 'deny-list-read-failed',
   WriteFailed = 'write-failed',
   Cancelled = 'cancelled',
 }

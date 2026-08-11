@@ -68,6 +68,8 @@ const FAILURE_MESSAGES: Readonly<Record<SyncFailure, string>> = {
   [SyncFailure.ManagedBlockConflict]:
     'The target file has a malformed pieces-to-agents block. Fix the start/end markers manually.',
   [SyncFailure.ReadFailed]: 'Could not read the target file.',
+  [SyncFailure.DenyListReadFailed]:
+    `Could not read ${DENY_LIST_FILENAME}. Fix its permissions or remove it and try again.`,
   [SyncFailure.WriteFailed]: 'Could not write the target file.',
   [SyncFailure.Cancelled]: 'Cancelled. Nothing was written.',
 }
@@ -86,6 +88,7 @@ const EXIT_CODES: Readonly<Record<SyncFailure, number>> = {
   [SyncFailure.InvalidDays]: 13,
   [SyncFailure.ManagedBlockConflict]: 7,
   [SyncFailure.ReadFailed]: 8,
+  [SyncFailure.DenyListReadFailed]: 15,
   [SyncFailure.WriteFailed]: 9,
   [SyncFailure.Cancelled]: 1,
 }
@@ -198,7 +201,9 @@ const run = async (): Promise<Result<string, SyncFailure>> => {
   const connection = await McpClient.connect()
   if (!connection.ok) return connection
 
-  const deniedTerms = await loadDenyList(repositoryRoot.value)
+  const loadedDenyList = await loadDenyList(repositoryRoot.value)
+  if (!loadedDenyList.ok) return loadedDenyList
+  const deniedTerms = loadedDenyList.value
   if (deniedTerms.length > 0) {
     process.stdout.write(`${DIM}Redacting ${deniedTerms.length} term(s) from ${DENY_LIST_FILENAME}${RESET}\n`)
   }

@@ -208,9 +208,12 @@ export const collectMemories = async (
   const bestCategoryBySummary = new Map<string, ScoredCategory>()
 
   const searchLimit = searchLimitForWindow(options.windowDays)
+  const projectTerms = [options.project, ...options.aliases]
+    .map((term) => term.trim())
+    .filter((term) => term.length > 0)
   const searches = await Promise.all(
-    Object.values(MemoryCategory).map((category) =>
-      searchCategory(client, category, options.project, searchLimit),
+    Object.values(MemoryCategory).flatMap((category) =>
+      projectTerms.map((term) => searchCategory(client, category, term, searchLimit)),
     ),
   )
 
@@ -290,12 +293,11 @@ export const collectMemories = async (
     })
   }
 
-  const projectTerms = [options.project, ...options.aliases]
+  const normalizedProjectTerms = projectTerms
     .map((term) => term.trim().toLowerCase())
-    .filter((term) => term.length > 0)
 
   const entries = [...bodyBySummaryId.values()]
-    .filter((body) => isAboutProject(body.title, projectTerms))
+    .filter((body) => isAboutProject(body.title, normalizedProjectTerms))
     .map(
       (body): MemoryEntry => ({
         category: body.category,
