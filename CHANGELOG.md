@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 0.1.19
 
 Aliases were applied only after search results came back, while every MCP query still used the
 primary project name. A session named solely after an alias could therefore never reach the
