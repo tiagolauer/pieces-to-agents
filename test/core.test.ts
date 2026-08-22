@@ -152,14 +152,30 @@ test('redact removes POSIX paths outside home and Windows UNC paths', () => {
   const inlineCode = redact('Edited `/opt/clients/private-project/parser.ts` today')
   const quoted = redact('Opened "/opt/clients/private-project/parser.ts" today')
   const bracketed = redact('Opened [/opt/clients/private-project/parser.ts] today')
+  const assigned = redact('Used --config=/home/user/private-project.json today')
+  const environment = redact('Set OUTPUT=/opt/clients/private-project/parser.ts today')
+  const singleSegment = redact('Opened /private-project today')
   const unc = redact('Edited \\\\corp-server\\clients\\private-project\\parser.ts today')
   const extendedUnc = redact('Edited \\\\?\\UNC\\corp-server\\clients\\private-project\\parser.ts today')
 
-  for (const scrubbed of [posix, inlineCode, quoted, bracketed, unc, extendedUnc]) {
+  for (const scrubbed of [
+    posix,
+    inlineCode,
+    quoted,
+    bracketed,
+    assigned,
+    environment,
+    singleSegment,
+    unc,
+    extendedUnc,
+  ]) {
     assert.doesNotMatch(scrubbed, /private-project/)
     assert.match(scrubbed, /\[local path\]/)
     assert.match(scrubbed, /today/)
   }
+
+  assert.equal(redact('Read https://example.com/private-project/docs'), 'Read https://example.com/private-project/docs')
+  assert.equal(redact('Edited ./private-project/parser.ts'), 'Edited ./private-project/parser.ts')
 })
 
 test('redact removes phone numbers', () => {
