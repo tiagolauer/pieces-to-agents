@@ -5,6 +5,7 @@ import { foldDiacritics, stripByteOrderMark } from './core.ts'
 const MINIMUM_TERM_LENGTH = 3
 const IGNORED_ENTRIES = new Set(['node_modules', '.git', 'dist', 'build', '.github', 'coverage'])
 const SEPARATOR_PATTERN = /[^a-z0-9]+/
+const ROOT_SOURCE_PATTERN = /\.(?:asm|bash|c|cc|clj|cljs|cpp|cs|css|cu|dart|elm|erl|ex|exs|f|f90|fs|fsx|go|groovy|h|hpp|hs|java|jl|js|jsx|kt|kts|less|lua|m|mm|mjs|mts|nim|php|pl|pm|ps1|py|r|rb|rs|sass|scala|scss|sh|sol|sql|svelte|swift|tf|ts|tsx|vb|vue|zig|zsh)$/i
 
 const PERSON_REFERENCE_PATTERN = /pieces:\/\/persons\//i
 
@@ -13,10 +14,10 @@ const GENERIC_TERMS: ReadonlySet<string> = new Set([
   'cli', 'codex', 'common', 'component', 'components', 'config', 'constants', 'context', 'copilot',
   'core', 'coverage', 'cursor', 'data', 'dist', 'doc', 'docs', 'e2e', 'example', 'examples',
   'fixture', 'fixtures', 'gemini', 'helper', 'helpers', 'hook', 'hooks', 'index', 'integration',
-  'layout', 'layouts', 'lib', 'log', 'logs', 'main', 'memory', 'middleware', 'migration',
+  'architecture', 'layout', 'layouts', 'lib', 'license', 'log', 'logs', 'main', 'memory', 'middleware', 'migration',
   'migrations', 'mock', 'mocks', 'model', 'models', 'modules', 'node', 'output', 'package', 'page',
   'pages', 'provider', 'providers', 'public', 'readme', 'route', 'routes', 'schema', 'schemas',
-  'scripts', 'server', 'service', 'services', 'shared', 'spec', 'specs', 'src', 'state', 'store',
+  'scripts', 'security', 'server', 'service', 'services', 'shared', 'spec', 'specs', 'src', 'state', 'store',
   'style', 'styles', 'temp', 'test', 'tests', 'tmp', 'tools', 'types', 'unit', 'utils', 'view',
   'views', 'web', 'www',
 ])
@@ -68,7 +69,15 @@ export const collectProjectVocabulary = async (
     const entries = await readdir(repositoryRoot, { withFileTypes: true })
     for (const entry of entries) {
       if (IGNORED_ENTRIES.has(entry.name) || entry.name.startsWith('.')) continue
-      if (!entry.isDirectory()) continue
+      if (!entry.isDirectory()) {
+        if (ROOT_SOURCE_PATTERN.test(entry.name)) {
+          const stem = foldDiacritics(entry.name.replace(/\.[^.]+$/, '')).trim()
+          if (stem.length >= MINIMUM_TERM_LENGTH && SEPARATOR_PATTERN.test(stem)) {
+            vocabulary.add(stem)
+          }
+        }
+        continue
+      }
 
       addTerm(vocabulary, entry.name)
       const children = await readdir(join(repositoryRoot, entry.name), { withFileTypes: true })

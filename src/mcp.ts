@@ -11,12 +11,15 @@ import {
 } from './core.ts'
 
 type JsonRpcResponse = {
-  result?: { content?: ReadonlyArray<{ type?: string; text?: string }> }
+  result?: {
+    content?: ReadonlyArray<{ type?: string; text?: string }>
+    isError?: boolean
+  }
   error?: { message?: string }
 }
 
 const isRecord = (value: unknown): value is Record<string, unknown> =>
-  typeof value === 'object' && value !== null
+  typeof value === 'object' && value !== null && !Array.isArray(value)
 
 const isTimeout = (caught: unknown): boolean =>
   isRecord(caught) && (caught.name === 'TimeoutError' || caught.name === 'AbortError')
@@ -74,6 +77,11 @@ export class McpClient {
     if (!response.ok) {
       process.stderr.write(`  while calling ${name}\n`)
       return response
+    }
+
+    if (response.value.result?.isError === true) {
+      process.stderr.write(`  ${name} reported a tool failure\n`)
+      return err(SyncFailure.McpCallFailed)
     }
 
     const text = response.value.result?.content?.[0]?.text
@@ -148,15 +156,21 @@ export class McpClient {
     }
 
     if (!isRecord(parsed)) return err(responseFailure)
+    if (parsed.jsonrpc !== '2.0') return err(responseFailure)
     if (parsed.id !== requestId) return err(responseFailure)
+    const hasResult = 'result' in parsed
+    const hasError = 'error' in parsed
+    if (hasResult === hasError) return err(responseFailure)
 
-    if (isRecord(parsed.error)) {
-      const detail = typeof parsed.error.message === 'string' ? parsed.error.message : 'no detail'
-      process.stderr.write(`  PiecesOS refused the call: ${detail}\n`)
-      return err(responseFailure)
+    if (hasResult) {
+      if (!isRecord(parsed.result)) return err(responseFailure)
+      return ok(parsed as JsonRpcResponse)
     }
 
-    return ok(parsed as JsonRpcResponse)
+    if (!isRecord(parsed.error)) return err(responseFailure)
+    const detail = typeof parsed.error.message === 'string' ? parsed.error.message : 'no detail'
+    process.stderr.write(`  PiecesOS refused the call: ${detail}\n`)
+    return err(responseFailure)
   }
 
   private async notify(method: string): Promise<void> {

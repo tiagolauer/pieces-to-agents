@@ -3,9 +3,9 @@
 ## 0.1.20
 
 Root-level documents and local planning notes could become project vocabulary. Generic words such as
-"security" or "architecture" then anchored unrelated bullets from a mixed session. Root files no
-longer contribute vocabulary; project names, aliases, package metadata, and first-level names inside
-project directories still do.
+"security" or "architecture" then anchored unrelated bullets from a mixed session. Root documents
+and generic single-name files no longer contribute vocabulary; distinctive compound source names,
+project names, aliases, package metadata, and first-level names inside project directories still do.
 
 Absolute path redaction now covers POSIX roots beyond `/home`, `/Users`, `/mnt`, and `/srv`, plus
 Windows UNC paths. A private path in lowercase can no longer bypass both the path scrubber and the
