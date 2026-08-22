@@ -20,27 +20,49 @@ const PLACEHOLDER_LABELS = [
 ] as const
 
 const ORPHAN_BRACKET_PATTERN = new RegExp(
-  `\\[(?!(?:${PLACEHOLDER_LABELS.join('|')})\\])([^\\]]+)\\](?!\\()`,
+  `\\[(?!(?:${PLACEHOLDER_LABELS.join('|')})\\])([^\\]]+)\\](?![(:])`,
   'g',
 )
 
+const PATH_PATTERNS: ReadonlyArray<readonly [RegExp, string]> = [
+  [/`(?:file:\/\/|[A-Za-z]:[\\/]|\\\\|\/\/[^/.\n]+\/|\/(?!\/))[^`\n]+`/gi, '`[local path]`'],
+  [/"(?:file:\/\/|[A-Za-z]:[\\/]|\\\\|\/\/[^/.\n]+\/|\/(?!\/))[^"\n]+"/gi, '"[local path]"'],
+  [/'(?:file:\/\/|[A-Za-z]:[\\/]|\\\\|\/\/[^/.\n]+\/|\/(?!\/))[^'\n]+'/gi, "'[local path]'"],
+  [/\[(?:file:\/\/|[A-Za-z]:[\\/]|\\\\|\/\/[^/.\n]+\/|\/(?!\/))[^\]\n]+\]/gi, '[local path]'],
+  [/\((?:file:\/\/|[A-Za-z]:[\\/]|\\\\|\/\/[^/.\n]+\/|\/(?!\/))[^)\n]+\)/gi, '([local path])'],
+  [/<(?:file:\/\/|[A-Za-z]:[\\/]|\\\\|\/\/[^/.\n]+\/|\/(?!\/))[^>\n]+>/gi, '<[local path]>'],
+  [/\{(?:file:\/\/|[A-Za-z]:[\\/]|\\\\|\/\/[^/.\n]+\/|\/(?!\/))[^}\n]+\}/gi, '{[local path]}'],
+  [/(^|[^A-Za-z0-9+.-])file:\/\/[^\n]+/gim, '$1[local path]'],
+  [/\b[A-Za-z]:[\\/][^\n]+/g, '[local path]'],
+  [/\\\\(?:\?\\)?[^\n]+/g, '[local path]'],
+  [/(^|[^A-Za-z0-9/.:])\/\/[^/.\s]+\/[^\n]+/gm, '$1[local path]'],
+  [/(^|[^A-Za-z0-9/.])\/(?!\/|>)[^\n]+/gm, '$1[local path]'],
+]
+
 const SECRET_PATTERNS: ReadonlyArray<readonly [RegExp, string]> = [
+  [/\b[A-Za-z][A-Za-z0-9+.-]*:\/\/(?:[^\s/@:]+(?::[^\s/@]*)?|:[^\s/@]+)@[^\s"'`<>()\]]+/g, '[url-with-credentials]'],
+  [/(^|[^A-Za-z0-9+.-:])\/\/(?:[^\s/@:]+(?::[^\s/@]*)?|:[^\s/@]+)@[^\s"'`<>()\]]+/gm, '$1[url-with-credentials]'],
   [/[\w.+-]+@[\w-]+(?:\.[\w-]+)*\.[a-z]{2,}\b/gi, '[email]'],
-  [/file:\/\/\/\S+/gi, '[local path]'],
-  [/\b[A-Za-z]:[\\/](?:[^\\/\n"'`)\]]*[\\/])*[^\s"'`)\]]*/g, '[local path]'],
-  [/(?:^|\s)\/(?:home|Users|mnt|srv)\/(?:[^/\n"'`)\]]*\/)*[^\s"'`)\]]*/g, ' [local path]'],
   [/\beyJ[A-Za-z0-9_-]{8,}\.[A-Za-z0-9_-]{8,}\.[A-Za-z0-9_-]+/g, '[jwt]'],
   [/\bgh[pousr]_[A-Za-z0-9]{16,}/g, '[github-token]'],
   [/\bxox[baprs]-[A-Za-z0-9-]{10,}/g, '[slack-token]'],
   [/\bAKIA[0-9A-Z]{16}\b/g, '[aws-key]'],
   [/\b(?:sk|pk|rk)[-_](?:live|test|proj)?[-_]?[A-Za-z0-9]{20,}/gi, '[api-key]'],
-  [/\b[A-Za-z][A-Za-z0-9+.-]*:\/\/[^\s/@:]+:[^\s/@]+@\S+/g, '[url-with-credentials]'],
   [/\[([^\]]+)\]\(\s*pieces:\/\/[^)]*\)/gi, '$1'],
   [/\(pieces:\/\/[^)\s]+\)/gi, ''],
   [/pieces:\/\/\S+/gi, ''],
   [/\+\d[\d  ().-]{7,}\d/g, '[phone]'],
   [/\(\d{2,3}\)\s?\d{4,5}[- ]?\d{4}/g, '[phone]'],
 ]
+
+const PRESERVED_CONTEXT_PATTERNS: ReadonlyArray<RegExp> = [
+  /\]\(\s*<?\/{1,2}(?!\/)[^)\n]*>?\)/g,
+  /^\s*!?\[[^\]\n]+\]:\s*<?\/{1,2}(?!\/)[^\n]*$/gm,
+  /\b(?:action|formaction|href|poster|src)\s*=\s*(["'])\/{1,2}(?!\/)[^\n]*?\1/gi,
+  /<\/[A-Za-z][A-Za-z0-9:-]*\s*>/g,
+]
+
+const PRESERVED_CONTEXT_MARKER_PATTERN = /\u0000preserved-context-(\d+)\u0000/g
 
 const MALFORMED_LINK_PATTERNS: ReadonlyArray<readonly [RegExp, string]> = [
   [/\[`?\[(?:local path|phone|email)\]`?\]\([^)]*\)?/g, '[redacted]'],
@@ -63,6 +85,24 @@ export const redact = (text: string, deniedTerms: ReadonlyArray<string> = []): s
     if (trimmed.length === 0) continue
     output = output.replace(new RegExp(escapeForRegex(trimmed), 'gi'), REDACTED)
   }
+
+  const preservedContexts: string[] = []
+  for (const pattern of PRESERVED_CONTEXT_PATTERNS) {
+    output = output.replace(pattern, (match: string): string => {
+      const marker = `\u0000preserved-context-${preservedContexts.length}\u0000`
+      preservedContexts.push(match)
+      return marker
+    })
+  }
+
+  for (const [pattern, replacement] of PATH_PATTERNS) {
+    output = output.replace(pattern, replacement)
+  }
+
+  output = output.replace(
+    PRESERVED_CONTEXT_MARKER_PATTERN,
+    (_match: string, index: string): string => preservedContexts[Number(index)] ?? '',
+  )
 
   for (const [pattern, replacement] of MALFORMED_LINK_PATTERNS) {
     output = output.replace(pattern, replacement)

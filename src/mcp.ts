@@ -11,12 +11,15 @@ import {
 } from './core.ts'
 
 type JsonRpcResponse = {
-  result?: { content?: ReadonlyArray<{ type?: string; text?: string }> }
+  result?: {
+    content?: ReadonlyArray<{ type?: string; text?: string }>
+    isError?: boolean
+  }
   error?: { message?: string }
 }
 
 const isRecord = (value: unknown): value is Record<string, unknown> =>
-  typeof value === 'object' && value !== null
+  typeof value === 'object' && value !== null && !Array.isArray(value)
 
 const isTimeout = (caught: unknown): boolean =>
   isRecord(caught) && (caught.name === 'TimeoutError' || caught.name === 'AbortError')
@@ -40,7 +43,7 @@ export const parseEventStreamMessage = (raw: string, requestId?: string): unknow
 
   if (requestId !== undefined) {
     const matching = messages.find((message) => isRecord(message) && message.id === requestId)
-    if (matching !== undefined) return matching
+    return matching ?? null
   }
 
   const response = messages.find(
@@ -76,6 +79,11 @@ export class McpClient {
       return response
     }
 
+    if (response.value.result?.isError === true) {
+      process.stderr.write(`  ${name} reported a tool failure\n`)
+      return err(SyncFailure.McpCallFailed)
+    }
+
     const text = response.value.result?.content?.[0]?.text
     if (typeof text !== 'string') {
       process.stderr.write(`  ${name} answered without any content\n`)
@@ -93,6 +101,9 @@ export class McpClient {
     method: string,
     params: Record<string, unknown>,
   ): Promise<Result<JsonRpcResponse, SyncFailure>> {
+    const responseFailure = method === 'initialize'
+      ? SyncFailure.McpHandshakeFailed
+      : SyncFailure.McpCallFailed
     const headers: Record<string, string> = {
       'Content-Type': 'application/json',
       Accept: 'application/json, text/event-stream',
@@ -122,31 +133,44 @@ export class McpClient {
 
     if (!response.ok) {
       process.stderr.write(`  PiecesOS answered ${response.status} ${response.statusText}\n`)
-      return err(method === 'initialize' ? SyncFailure.McpHandshakeFailed : SyncFailure.McpCallFailed)
+      return err(responseFailure)
     }
 
     const returnedSession = response.headers.get('mcp-session-id')
     if (returnedSession) this.sessionId = returnedSession
 
-    const raw = await response.text()
+    let raw: string
+    try {
+      raw = await response.text()
+    } catch (caught) {
+      if (isTimeout(caught)) return err(SyncFailure.McpTimeout)
+      return err(responseFailure)
+    }
 
     let parsed: unknown
     try {
       parsed = JSON.parse(raw)
     } catch {
       parsed = parseEventStreamMessage(raw, requestId)
-      if (parsed === null) return err(SyncFailure.McpCallFailed)
+      if (parsed === null) return err(responseFailure)
     }
 
-    if (!isRecord(parsed)) return err(SyncFailure.McpCallFailed)
+    if (!isRecord(parsed)) return err(responseFailure)
+    if (parsed.jsonrpc !== '2.0') return err(responseFailure)
+    if (parsed.id !== requestId) return err(responseFailure)
+    const hasResult = 'result' in parsed
+    const hasError = 'error' in parsed
+    if (hasResult === hasError) return err(responseFailure)
 
-    if (isRecord(parsed.error)) {
-      const detail = typeof parsed.error.message === 'string' ? parsed.error.message : 'no detail'
-      process.stderr.write(`  PiecesOS refused the call: ${detail}\n`)
-      return err(SyncFailure.McpCallFailed)
+    if (hasResult) {
+      if (!isRecord(parsed.result)) return err(responseFailure)
+      return ok(parsed as JsonRpcResponse)
     }
 
-    return ok(parsed as JsonRpcResponse)
+    if (!isRecord(parsed.error)) return err(responseFailure)
+    const detail = typeof parsed.error.message === 'string' ? parsed.error.message : 'no detail'
+    process.stderr.write(`  PiecesOS refused the call: ${detail}\n`)
+    return err(responseFailure)
   }
 
   private async notify(method: string): Promise<void> {

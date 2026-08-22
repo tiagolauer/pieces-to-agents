@@ -1,10 +1,12 @@
 import assert from 'node:assert/strict'
-import { mkdir, mkdtemp, readFile, writeFile } from 'node:fs/promises'
+import { spawn } from 'node:child_process'
+import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises'
 import { createServer, type IncomingMessage } from 'node:http'
 import type { AddressInfo } from 'node:net'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { test } from 'node:test'
+import { fileURLToPath, pathToFileURL } from 'node:url'
 import { composeBlock, spliceManagedBlock, trimTitleToProject } from '../src/agents-file.ts'
 import {
   CLIENT_VERSION,
@@ -37,6 +39,8 @@ const VOCABULARY: ReadonlySet<string> = new Set([
   'parser',
 ])
 
+const CLI_PROCESS_TIMEOUT_MS = 10_000
+
 const entry = (overrides: Partial<MemoryEntry> = {}): MemoryEntry => ({
   category: MemoryCategory.ArchitectureDecisions,
   title: 'Session title',
@@ -49,6 +53,39 @@ const readRequestBody = async (request: IncomingMessage): Promise<string> => {
   const chunks: Buffer[] = []
   for await (const chunk of request) chunks.push(Buffer.from(chunk))
   return Buffer.concat(chunks).toString('utf8')
+}
+
+type ProcessResult = {
+  readonly code: number | null
+  readonly stdout: string
+  readonly stderr: string
+}
+
+const runCli = async (
+  repositoryRoot: string,
+  preloadPath: string,
+  answer: string,
+): Promise<ProcessResult> => {
+  const cliPath = fileURLToPath(new URL('../src/cli.ts', import.meta.url))
+  const child = spawn(
+    process.execPath,
+    ['--import', import.meta.resolve('tsx'), '--import', pathToFileURL(preloadPath).href, cliPath],
+    {
+      cwd: repositoryRoot,
+      stdio: ['pipe', 'pipe', 'pipe'],
+      timeout: CLI_PROCESS_TIMEOUT_MS,
+    },
+  )
+  let stdout = ''
+  let stderr = ''
+  child.stdout.setEncoding('utf8').on('data', (chunk: string) => { stdout += chunk })
+  child.stderr.setEncoding('utf8').on('data', (chunk: string) => { stderr += chunk })
+  child.stdin.end(answer)
+
+  return await new Promise<ProcessResult>((resolve, reject) => {
+    child.once('error', reject)
+    child.once('close', (code) => resolve({ code, stdout, stderr }))
+  })
 }
 
 test('spliceManagedBlock appends the block and preserves handwritten content', () => {
@@ -101,7 +138,7 @@ test('redact leaves a package version alone', () => {
 
 test('redact removes absolute paths from any platform', () => {
   const windows = redact('Edited F:\\Fontes\\Clientes\\secret-app\\src\\core.ts today')
-  const unix = redact('Edited /home/tiago/clients/secret-app/src/core.ts today')
+  const unix = redact('Edited /home/developer/clients/secret-app/src/core.ts today')
   const fileUri = redact('Opened file:///F:/Fontes/Clientes/secret-app/package.json')
 
   for (const scrubbed of [windows, unix, fileUri]) {
@@ -110,11 +147,93 @@ test('redact removes absolute paths from any platform', () => {
   }
 })
 
+test('redact removes POSIX paths outside home and Windows UNC paths', () => {
+  const posix = redact('Edited /opt/clients/private-project/parser.ts today')
+  const inlineCode = redact('Edited `/opt/clients/private-project/parser.ts` today')
+  const quoted = redact('Opened "/opt/clients/private-project/parser.ts" today')
+  const bracketed = redact('Opened [/opt/clients/private-project/parser.ts] today')
+  const assigned = redact('Used --config=/home/user/private-project.json today')
+  const environment = redact('Set OUTPUT=/opt/clients/private-project/parser.ts today')
+  const singleSegment = redact('Opened /private-project today')
+  const spacedPosix = redact('Opened "/opt/clients/private-project/secret file.txt" today')
+  const spacedWindows = redact('Opened "C:\\clients\\private-project\\secret file.txt" today')
+  const parenthesized = redact('Opened (/opt/clients/private-project/secret file.txt) today')
+  const angled = redact('Opened <file://corp-server/clients/private-project/secret file.txt> today')
+  const unquotedSpacedPosix = redact('Opened /opt/clients/private-project/secret file.txt today')
+  const unquotedSpacedWindows = redact('Opened C:\\clients\\private-project\\secret file.txt today')
+  const unquotedNoExtension = redact('Opened /opt/clients/private-project/Secret Client')
+  const unquotedPeriod = redact('Opened C:\\clients\\private-project\\secret file.txt.')
+  const bracketedSegment = redact('Opened C:\\clients\\[private-project]\\app.ts today')
+  const unc = redact('Edited \\\\corp-server\\clients\\private-project\\parser.ts today')
+  const extendedUnc = redact('Edited \\\\?\\UNC\\corp-server\\clients\\private-project\\parser.ts today')
+  const forwardUnc = redact('Edited //corp-server/clients/private-project/parser.ts today')
+  const networkFileUri = redact('Opened file://corp-server/clients/private-project/parser.ts today')
+
+  for (const scrubbed of [
+    posix,
+    inlineCode,
+    quoted,
+    bracketed,
+    assigned,
+    environment,
+    singleSegment,
+    spacedPosix,
+    spacedWindows,
+    parenthesized,
+    angled,
+    unquotedSpacedPosix,
+    unquotedSpacedWindows,
+    unquotedNoExtension,
+    unquotedPeriod,
+    bracketedSegment,
+    unc,
+    extendedUnc,
+    forwardUnc,
+    networkFileUri,
+  ]) {
+    assert.doesNotMatch(scrubbed, /private-project/)
+    assert.match(scrubbed, /\[local path\]/)
+  }
+
+  assert.match(quoted, /today/)
+  assert.match(spacedPosix, /today/)
+  assert.equal(redact('Read https://example.com/private-project/docs'), 'Read https://example.com/private-project/docs')
+  assert.equal(redact('Read //cdn.example.com/assets/app.js'), 'Read //cdn.example.com/assets/app.js')
+  assert.equal(redact('Read [app](//cdn.example.com/assets/app.js) today'), 'Read [app](//cdn.example.com/assets/app.js) today')
+  assert.equal(redact('Read [guide](/docs/setup) today'), 'Read [guide](/docs/setup) today')
+  assert.equal(redact('Read [guide](</docs/getting started>) today'), 'Read [guide](</docs/getting started>) today')
+  assert.equal(redact('[guide]: /docs/setup'), '[guide]: /docs/setup')
+  assert.equal(redact('![logo]: /assets/logo.svg'), '![logo]: /assets/logo.svg')
+  assert.equal(redact('Set href="/docs/setup" in the parser'), 'Set href="/docs/setup" in the parser')
+  assert.equal(redact("Set src = '/assets/app.js' in the parser"), "Set src = '/assets/app.js' in the parser")
+  assert.doesNotMatch(redact('Set href="C:\\clients\\private-project\\app.ts"'), /private-project/)
+  assert.equal(redact('<a href="/docs">Docs</a>'), '<a href="/docs">Docs</a>')
+  assert.equal(redact('<img src="/assets/logo.svg" />'), '<img src="/assets/logo.svg" />')
+  assert.equal(redact('Closed </div> after rendering'), 'Closed </div> after rendering')
+  assert.doesNotMatch(redact('[admin](//alice:!#$%@example.com/private)'), /alice|!#\$%/)
+  assert.doesNotMatch(redact('[admin](//alice:supersecret@example.com/private)'), /alice|supersecret/)
+  assert.equal(
+    redact('<a href="//alice:supersecret@example.com/private">admin</a>'),
+    '<a href="[url-with-credentials]">admin</a>',
+  )
+  for (const credentialUrl of [
+    '[admin](//git@localhost/private)',
+    '[admin](//alice:@example.com/private)',
+    '[admin](https://git@localhost/private)',
+    '[admin](//:!#$%@example.com/private)',
+    '[admin](https://:!#$%@example.com/private)',
+  ]) {
+    assert.doesNotMatch(redact(credentialUrl), /alice|git@|!#\$%/)
+  }
+  assert.equal(redact('Opened profile://example.com/private'), 'Opened profile://example.com/private')
+  assert.equal(redact('Edited ./private-project/parser.ts'), 'Edited ./private-project/parser.ts')
+})
+
 test('redact removes phone numbers', () => {
-  const international = redact('Outreach from a founder (+39 389 283 6813) about a role')
+  const international = redact('Outreach from a founder (+1 202 555 0100) about a role')
   const brazilian = redact('Called (11) 98765-4321 to confirm')
 
-  assert.doesNotMatch(international, /389 283 6813/)
+  assert.doesNotMatch(international, /202 555 0100/)
   assert.doesNotMatch(brazilian, /98765-4321/)
   assert.match(international, /\[phone\]/)
   assert.match(brazilian, /\[phone\]/)
@@ -134,7 +253,7 @@ test('redact collapses an internal Pieces link to its text', () => {
 })
 
 test('redact keeps its own placeholders intact', () => {
-  const scrubbed = redact('Wrote to F:\\work\\app\\core.ts and mailed dev@example.com')
+  const scrubbed = redact('Mailed dev@example.com and wrote to F:\\work\\app\\core.ts')
 
   assert.match(scrubbed, /\[local path\]/)
   assert.match(scrubbed, /\[email\]/)
@@ -322,6 +441,132 @@ test('collectMemories searches aliases as well as the primary project name', asy
     if (!result.ok) return
     assert.equal(result.value[0]?.title, 'PTHA parser refactor')
     assert.equal(queries.some((query) => query.includes('ptha')), true)
+  } finally {
+    await new Promise<void>((resolve, reject) => {
+      server.close((error) => error ? reject(error) : resolve())
+    })
+  }
+})
+
+test('McpClient maps a truncated handshake body to a Result failure', async () => {
+  const server = createServer((_request, response) => {
+    response.writeHead(200, { 'Content-Type': 'application/json' })
+    response.flushHeaders()
+    response.write('{"jsonrpc":"2.0"')
+    setTimeout(() => response.destroy(), 10)
+  })
+
+  await new Promise<void>((resolve) => server.listen(0, '127.0.0.1', resolve))
+  try {
+    const { port } = server.address() as AddressInfo
+    const result = await McpClient.connect(`http://127.0.0.1:${port}`)
+
+    assert.deepEqual(result, { ok: false, error: SyncFailure.McpHandshakeFailed })
+  } finally {
+    await new Promise<void>((resolve, reject) => {
+      server.close((error) => error ? reject(error) : resolve())
+    })
+  }
+})
+
+test('McpClient rejects a JSON response with another request id', async () => {
+  const server = createServer((_request, response) => {
+    response.setHeader('Content-Type', 'application/json')
+    response.end(JSON.stringify({ jsonrpc: '2.0', id: 'stale', result: {} }))
+  })
+
+  await new Promise<void>((resolve) => server.listen(0, '127.0.0.1', resolve))
+  try {
+    const { port } = server.address() as AddressInfo
+    const result = await McpClient.connect(`http://127.0.0.1:${port}`)
+
+    assert.deepEqual(result, { ok: false, error: SyncFailure.McpHandshakeFailed })
+  } finally {
+    await new Promise<void>((resolve, reject) => {
+      server.close((error) => error ? reject(error) : resolve())
+    })
+  }
+})
+
+test('McpClient rejects an SSE response without a result or error', async () => {
+  const server = createServer(async (request, response) => {
+    const body = JSON.parse(await readRequestBody(request)) as { id?: string }
+    response.setHeader('Content-Type', 'text/event-stream')
+    response.end(`data: ${JSON.stringify({ jsonrpc: '2.0', id: body.id })}\n\n`)
+  })
+
+  await new Promise<void>((resolve) => server.listen(0, '127.0.0.1', resolve))
+  try {
+    const { port } = server.address() as AddressInfo
+    const result = await McpClient.connect(`http://127.0.0.1:${port}`)
+
+    assert.deepEqual(result, { ok: false, error: SyncFailure.McpHandshakeFailed })
+  } finally {
+    await new Promise<void>((resolve, reject) => {
+      server.close((error) => error ? reject(error) : resolve())
+    })
+  }
+})
+
+test('McpClient rejects invalid JSON-RPC envelopes', async () => {
+  const invalidResponses = [
+    { jsonrpc: '2.0', result: 'invalid', error: null },
+    { jsonrpc: '2.0', result: [] },
+    { jsonrpc: '2.0', error: null },
+    { jsonrpc: '2.0', result: {}, error: 'invalid' },
+    { jsonrpc: '1.0', result: {} },
+  ]
+
+  for (const invalid of invalidResponses) {
+    const server = createServer(async (request, response) => {
+      const body = JSON.parse(await readRequestBody(request)) as { id?: string }
+      response.setHeader('Content-Type', 'application/json')
+      response.end(JSON.stringify({ ...invalid, id: body.id }))
+    })
+
+    await new Promise<void>((resolve) => server.listen(0, '127.0.0.1', resolve))
+    try {
+      const { port } = server.address() as AddressInfo
+      const result = await McpClient.connect(`http://127.0.0.1:${port}`)
+
+      assert.deepEqual(result, { ok: false, error: SyncFailure.McpHandshakeFailed })
+    } finally {
+      await new Promise<void>((resolve, reject) => {
+        server.close((error) => error ? reject(error) : resolve())
+      })
+    }
+  }
+})
+
+test('McpClient rejects a tool result marked as an error', async () => {
+  const server = createServer(async (request, response) => {
+    const body = JSON.parse(await readRequestBody(request)) as { id?: string; method?: string }
+    if (body.method === 'notifications/initialized') {
+      response.statusCode = 202
+      response.end()
+      return
+    }
+
+    response.setHeader('Content-Type', 'application/json')
+    response.end(JSON.stringify({
+      jsonrpc: '2.0',
+      id: body.id,
+      result: body.method === 'tools/call'
+        ? { isError: true, content: [{ type: 'text', text: 'database unavailable' }] }
+        : {},
+    }))
+  })
+
+  await new Promise<void>((resolve) => server.listen(0, '127.0.0.1', resolve))
+  try {
+    const { port } = server.address() as AddressInfo
+    const connected = await McpClient.connect(`http://127.0.0.1:${port}`)
+    assert.equal(connected.ok, true)
+    if (!connected.ok) return
+
+    const result = await connected.value.callTool('workstream_summaries_vector_search', {})
+
+    assert.deepEqual(result, { ok: false, error: SyncFailure.McpCallFailed })
   } finally {
     await new Promise<void>((resolve, reject) => {
       server.close((error) => error ? reject(error) : resolve())
@@ -643,6 +888,12 @@ test('parseEventStreamMessage picks the response matching the request id', () =>
   })
 })
 
+test('parseEventStreamMessage rejects a response with another request id', () => {
+  const raw = 'data: {"jsonrpc":"2.0","id":"stale","result":{}}\n\n'
+
+  assert.equal(parseEventStreamMessage(raw, 'expected'), null)
+})
+
 test('composeBlock keeps an older entry the current search no longer returns', () => {
   const previous = composeBlock(
     [entry({ title: 'Old session', createdAt: '2026-06-01T10:00:00.000Z' })],
@@ -814,6 +1065,129 @@ test('collectProjectVocabulary keeps a project term that reads as generic', asyn
   const vocabulary = await collectProjectVocabulary(root, ['agents'])
 
   assert.equal(vocabulary.has('agents'), true)
+})
+
+test('collectProjectVocabulary ignores root documents as project anchors', async () => {
+  const root = await mkdtemp(join(tmpdir(), 'p2a-root-docs-'))
+  await mkdir(join(root, 'src'))
+  await writeFile(join(root, 'SECURITY.md'), '# Security', 'utf8')
+  await writeFile(join(root, 'ARCHITECTURE.md'), '# Architecture', 'utf8')
+  await writeFile(join(root, 'invoice-reconciler.py'), 'print("ready")', 'utf8')
+  await writeFile(join(root, 'payment-export.dart'), 'void main() {}', 'utf8')
+  await writeFile(join(root, 'audit-report.sql'), 'select 1;', 'utf8')
+  await writeFile(join(root, 'cache-cleaner.sh'), 'exit 0', 'utf8')
+  await writeFile(join(root, 'event-router.lua'), 'return {}', 'utf8')
+  await writeFile(join(root, 'security.ts'), 'export {}', 'utf8')
+  await writeFile(join(root, 'auth.ts'), 'export {}', 'utf8')
+  await writeFile(join(root, 'Dockerfile'), 'FROM scratch', 'utf8')
+  await writeFile(join(root, 'Makefile'), 'all:', 'utf8')
+  await writeFile(join(root, 'CHANGELOG'), 'Initial release', 'utf8')
+  await writeFile(join(root, 'client-security.markdown'), '# Security', 'utf8')
+  await writeFile(join(root, 'CODE_OF_CONDUCT'), 'Be kind', 'utf8')
+  await writeFile(join(root, 'client-roadmap.pptx'), 'presentation', 'utf8')
+  await writeFile(join(root, 'team-budget.xlsx'), 'spreadsheet', 'utf8')
+  await writeFile(join(root, 'release-plan.org'), 'notes', 'utf8')
+  await writeFile(join(root, 'src', 'parser.ts'), 'export {}', 'utf8')
+
+  const vocabulary = await collectProjectVocabulary(root, ['demo'])
+
+  assert.equal(vocabulary.has('security'), false)
+  assert.equal(vocabulary.has('auth'), false)
+  assert.equal(vocabulary.has('dockerfile'), false)
+  assert.equal(vocabulary.has('makefile'), false)
+  assert.equal(vocabulary.has('changelog'), false)
+  assert.equal(vocabulary.has('client-security'), false)
+  assert.equal(vocabulary.has('code_of_conduct'), false)
+  assert.equal(vocabulary.has('client-roadmap'), false)
+  assert.equal(vocabulary.has('team-budget'), false)
+  assert.equal(vocabulary.has('release-plan'), false)
+  assert.equal(vocabulary.has('architecture'), false)
+  assert.equal(vocabulary.has('invoice-reconciler'), true)
+  assert.equal(vocabulary.has('payment-export'), true)
+  assert.equal(vocabulary.has('audit-report'), true)
+  assert.equal(vocabulary.has('cache-cleaner'), true)
+  assert.equal(vocabulary.has('event-router'), true)
+  assert.equal(vocabulary.has('parser'), true)
+  assert.equal(isAnchoredToProject('Reviewed the neighbour-app security posture', vocabulary), false)
+  assert.equal(isAnchoredToProject('Rewrote the invoice reconciler to catch duplicate rows', vocabulary), true)
+  assert.equal(isAnchoredToProject('Fixed security checks in unrelated-client', vocabulary), false)
+  assert.equal(isAnchoredToProject('Fixed auth in unrelated-client', vocabulary), false)
+})
+
+test('CLI writes only after approval and preserves existing content', async () => {
+  const root = await mkdtemp(join(tmpdir(), 'p2a-cli-'))
+  const targetPath = join(root, 'AGENTS.md')
+  const preloadPath = join(root, 'mock-mcp.mjs')
+  const original = '# Notes\n\nKeep me.\n'
+
+  try {
+    await mkdir(join(root, '.git'))
+    await mkdir(join(root, 'src'))
+    await writeFile(join(root, 'src', 'parser.ts'), 'export {}', 'utf8')
+    await writeFile(targetPath, original, 'utf8')
+    await writeFile(
+      preloadPath,
+      `const project = process.cwd().split(/[\\\\/]/).at(-1)
+const createdAt = new Date().toISOString()
+globalThis.fetch = async (_input, init) => {
+  const body = JSON.parse(String(init?.body ?? '{}'))
+  if (body.method === 'notifications/initialized') return new Response(null, { status: 202 })
+
+  let payload = {}
+  if (body.method === 'tools/call') {
+    const tool = body.params?.name
+    if (tool === 'workstream_summaries_vector_search') payload = { results: [] }
+    if (tool === 'workstream_summaries_full_text_search') {
+      payload = { results: [{ summary: { id: 'summary-1' } }] }
+    }
+    if (tool === 'workstream_summaries_batch_snapshot') {
+      payload = {
+        items: [{
+          id: 'summary-1',
+          name: project + ' maintenance',
+          created: { value: createdAt },
+          annotations: { indices: { 'annotation-1': {} } },
+        }],
+      }
+    }
+    if (tool === 'annotations_batch_snapshot') {
+      payload = {
+        items: [{
+          id: 'annotation-1',
+          type: 'SUMMARY',
+          text: '- Rewrote the parser to preserve approved content',
+        }],
+      }
+    }
+  }
+
+  const result = body.method === 'tools/call'
+    ? { content: [{ type: 'text', text: JSON.stringify(payload) }] }
+    : {}
+  return new Response(
+    JSON.stringify({ jsonrpc: '2.0', id: body.id, result }),
+    { status: 200, headers: { 'Content-Type': 'application/json', 'mcp-session-id': 'test' } },
+  )
+}
+`,
+      'utf8',
+    )
+
+    const cancelled = await runCli(root, preloadPath, 'n\n')
+    assert.equal(cancelled.code, 1, cancelled.stderr)
+    assert.match(cancelled.stdout, /Proposed changes to AGENTS\.md/)
+    assert.equal(await readFile(targetPath, 'utf8'), original)
+
+    const approved = await runCli(root, preloadPath, 'y\n')
+    assert.equal(approved.code, 0, approved.stderr)
+    assert.match(approved.stdout, /Wrote AGENTS\.md with 1 memories/)
+
+    const written = await readFile(targetPath, 'utf8')
+    assert.match(written, /Keep me\./)
+    assert.match(written, /Rewrote the parser to preserve approved content/)
+  } finally {
+    await rm(root, { recursive: true, force: true })
+  }
 })
 
 test('detectCandidateEntities flags an unknown mid-sentence proper noun', () => {
