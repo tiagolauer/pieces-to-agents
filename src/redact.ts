@@ -29,7 +29,7 @@ const SECRET_PATTERNS: ReadonlyArray<readonly [RegExp, string]> = [
   [/file:\/\/\/\S+/gi, '[local path]'],
   [/\b[A-Za-z]:[\\/](?:[^\\/\n"'`)\]]*[\\/])*[^\s"'`)\]]*/g, '[local path]'],
   [/\\\\(?:\?\\)?(?:[^\\/\n"'`)\]]*[\\/])*[^\s"'`)\]]+/g, '[local path]'],
-  [/(^|[\s(])\/(?!\/)(?:[^/\n"'`)\]]+\/)+[^\s"'`)\]]+/gm, '$1[local path]'],
+  [/(^|[\s("'`\[])\/(?!\/)(?:[^/\n"'`)\]]+\/)+[^\s"'`)\]]+/gm, '$1[local path]'],
   [/\beyJ[A-Za-z0-9_-]{8,}\.[A-Za-z0-9_-]{8,}\.[A-Za-z0-9_-]+/g, '[jwt]'],
   [/\bgh[pousr]_[A-Za-z0-9]{16,}/g, '[github-token]'],
   [/\bxox[baprs]-[A-Za-z0-9-]{10,}/g, '[slack-token]'],

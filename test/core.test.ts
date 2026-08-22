@@ -39,6 +39,8 @@ const VOCABULARY: ReadonlySet<string> = new Set([
   'parser',
 ])
 
+const CLI_PROCESS_TIMEOUT_MS = 10_000
+
 const entry = (overrides: Partial<MemoryEntry> = {}): MemoryEntry => ({
   category: MemoryCategory.ArchitectureDecisions,
   title: 'Session title',
@@ -68,7 +70,11 @@ const runCli = async (
   const child = spawn(
     process.execPath,
     ['--import', import.meta.resolve('tsx'), '--import', pathToFileURL(preloadPath).href, cliPath],
-    { cwd: repositoryRoot, stdio: ['pipe', 'pipe', 'pipe'] },
+    {
+      cwd: repositoryRoot,
+      stdio: ['pipe', 'pipe', 'pipe'],
+      timeout: CLI_PROCESS_TIMEOUT_MS,
+    },
   )
   let stdout = ''
   let stderr = ''
@@ -143,9 +149,13 @@ test('redact removes absolute paths from any platform', () => {
 
 test('redact removes POSIX paths outside home and Windows UNC paths', () => {
   const posix = redact('Edited /opt/clients/private-project/parser.ts today')
+  const inlineCode = redact('Edited `/opt/clients/private-project/parser.ts` today')
+  const quoted = redact('Opened "/opt/clients/private-project/parser.ts" today')
+  const bracketed = redact('Opened [/opt/clients/private-project/parser.ts] today')
   const unc = redact('Edited \\\\corp-server\\clients\\private-project\\parser.ts today')
+  const extendedUnc = redact('Edited \\\\?\\UNC\\corp-server\\clients\\private-project\\parser.ts today')
 
-  for (const scrubbed of [posix, unc]) {
+  for (const scrubbed of [posix, inlineCode, quoted, bracketed, unc, extendedUnc]) {
     assert.doesNotMatch(scrubbed, /private-project/)
     assert.match(scrubbed, /\[local path\]/)
     assert.match(scrubbed, /today/)
