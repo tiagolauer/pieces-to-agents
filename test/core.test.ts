@@ -1,10 +1,12 @@
 import assert from 'node:assert/strict'
-import { mkdir, mkdtemp, readFile, writeFile } from 'node:fs/promises'
+import { spawn } from 'node:child_process'
+import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises'
 import { createServer, type IncomingMessage } from 'node:http'
 import type { AddressInfo } from 'node:net'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { test } from 'node:test'
+import { fileURLToPath, pathToFileURL } from 'node:url'
 import { composeBlock, spliceManagedBlock, trimTitleToProject } from '../src/agents-file.ts'
 import {
   CLIENT_VERSION,
@@ -49,6 +51,35 @@ const readRequestBody = async (request: IncomingMessage): Promise<string> => {
   const chunks: Buffer[] = []
   for await (const chunk of request) chunks.push(Buffer.from(chunk))
   return Buffer.concat(chunks).toString('utf8')
+}
+
+type ProcessResult = {
+  readonly code: number | null
+  readonly stdout: string
+  readonly stderr: string
+}
+
+const runCli = async (
+  repositoryRoot: string,
+  preloadPath: string,
+  answer: string,
+): Promise<ProcessResult> => {
+  const cliPath = fileURLToPath(new URL('../src/cli.ts', import.meta.url))
+  const child = spawn(
+    process.execPath,
+    ['--import', import.meta.resolve('tsx'), '--import', pathToFileURL(preloadPath).href, cliPath],
+    { cwd: repositoryRoot, stdio: ['pipe', 'pipe', 'pipe'] },
+  )
+  let stdout = ''
+  let stderr = ''
+  child.stdout.setEncoding('utf8').on('data', (chunk: string) => { stdout += chunk })
+  child.stderr.setEncoding('utf8').on('data', (chunk: string) => { stderr += chunk })
+  child.stdin.end(answer)
+
+  return await new Promise<ProcessResult>((resolve, reject) => {
+    child.once('error', reject)
+    child.once('close', (code) => resolve({ code, stdout, stderr }))
+  })
 }
 
 test('spliceManagedBlock appends the block and preserves handwritten content', () => {
@@ -107,6 +138,17 @@ test('redact removes absolute paths from any platform', () => {
   for (const scrubbed of [windows, unix, fileUri]) {
     assert.doesNotMatch(scrubbed, /secret-app/)
     assert.match(scrubbed, /\[local path\]/)
+  }
+})
+
+test('redact removes POSIX paths outside home and Windows UNC paths', () => {
+  const posix = redact('Edited /opt/clients/private-project/parser.ts today')
+  const unc = redact('Edited \\\\corp-server\\clients\\private-project\\parser.ts today')
+
+  for (const scrubbed of [posix, unc]) {
+    assert.doesNotMatch(scrubbed, /private-project/)
+    assert.match(scrubbed, /\[local path\]/)
+    assert.match(scrubbed, /today/)
   }
 })
 
@@ -322,6 +364,46 @@ test('collectMemories searches aliases as well as the primary project name', asy
     if (!result.ok) return
     assert.equal(result.value[0]?.title, 'PTHA parser refactor')
     assert.equal(queries.some((query) => query.includes('ptha')), true)
+  } finally {
+    await new Promise<void>((resolve, reject) => {
+      server.close((error) => error ? reject(error) : resolve())
+    })
+  }
+})
+
+test('McpClient maps a truncated handshake body to a Result failure', async () => {
+  const server = createServer((_request, response) => {
+    response.writeHead(200, { 'Content-Type': 'application/json' })
+    response.flushHeaders()
+    response.write('{"jsonrpc":"2.0"')
+    setTimeout(() => response.destroy(), 10)
+  })
+
+  await new Promise<void>((resolve) => server.listen(0, '127.0.0.1', resolve))
+  try {
+    const { port } = server.address() as AddressInfo
+    const result = await McpClient.connect(`http://127.0.0.1:${port}`)
+
+    assert.deepEqual(result, { ok: false, error: SyncFailure.McpHandshakeFailed })
+  } finally {
+    await new Promise<void>((resolve, reject) => {
+      server.close((error) => error ? reject(error) : resolve())
+    })
+  }
+})
+
+test('McpClient rejects a JSON response with another request id', async () => {
+  const server = createServer((_request, response) => {
+    response.setHeader('Content-Type', 'application/json')
+    response.end(JSON.stringify({ jsonrpc: '2.0', id: 'stale', result: {} }))
+  })
+
+  await new Promise<void>((resolve) => server.listen(0, '127.0.0.1', resolve))
+  try {
+    const { port } = server.address() as AddressInfo
+    const result = await McpClient.connect(`http://127.0.0.1:${port}`)
+
+    assert.deepEqual(result, { ok: false, error: SyncFailure.McpHandshakeFailed })
   } finally {
     await new Promise<void>((resolve, reject) => {
       server.close((error) => error ? reject(error) : resolve())
@@ -643,6 +725,12 @@ test('parseEventStreamMessage picks the response matching the request id', () =>
   })
 })
 
+test('parseEventStreamMessage rejects a response with another request id', () => {
+  const raw = 'data: {"jsonrpc":"2.0","id":"stale","result":{}}\n\n'
+
+  assert.equal(parseEventStreamMessage(raw, 'expected'), null)
+})
+
 test('composeBlock keeps an older entry the current search no longer returns', () => {
   const previous = composeBlock(
     [entry({ title: 'Old session', createdAt: '2026-06-01T10:00:00.000Z' })],
@@ -814,6 +902,97 @@ test('collectProjectVocabulary keeps a project term that reads as generic', asyn
   const vocabulary = await collectProjectVocabulary(root, ['agents'])
 
   assert.equal(vocabulary.has('agents'), true)
+})
+
+test('collectProjectVocabulary ignores root documents as project anchors', async () => {
+  const root = await mkdtemp(join(tmpdir(), 'p2a-root-docs-'))
+  await mkdir(join(root, 'src'))
+  await writeFile(join(root, 'SECURITY.md'), '# Security', 'utf8')
+  await writeFile(join(root, 'ARCHITECTURE.md'), '# Architecture', 'utf8')
+  await writeFile(join(root, 'src', 'parser.ts'), 'export {}', 'utf8')
+
+  const vocabulary = await collectProjectVocabulary(root, ['demo'])
+
+  assert.equal(vocabulary.has('security'), false)
+  assert.equal(vocabulary.has('architecture'), false)
+  assert.equal(vocabulary.has('parser'), true)
+  assert.equal(isAnchoredToProject('Reviewed the neighbour-app security posture', vocabulary), false)
+})
+
+test('CLI writes only after approval and preserves existing content', async () => {
+  const root = await mkdtemp(join(tmpdir(), 'p2a-cli-'))
+  const targetPath = join(root, 'AGENTS.md')
+  const preloadPath = join(root, 'mock-mcp.mjs')
+  const original = '# Notes\n\nKeep me.\n'
+
+  try {
+    await mkdir(join(root, '.git'))
+    await mkdir(join(root, 'src'))
+    await writeFile(join(root, 'src', 'parser.ts'), 'export {}', 'utf8')
+    await writeFile(targetPath, original, 'utf8')
+    await writeFile(
+      preloadPath,
+      `const project = process.cwd().split(/[\\\\/]/).at(-1)
+const createdAt = new Date().toISOString()
+globalThis.fetch = async (_input, init) => {
+  const body = JSON.parse(String(init?.body ?? '{}'))
+  if (body.method === 'notifications/initialized') return new Response(null, { status: 202 })
+
+  let payload = {}
+  if (body.method === 'tools/call') {
+    const tool = body.params?.name
+    if (tool === 'workstream_summaries_vector_search') payload = { results: [] }
+    if (tool === 'workstream_summaries_full_text_search') {
+      payload = { results: [{ summary: { id: 'summary-1' } }] }
+    }
+    if (tool === 'workstream_summaries_batch_snapshot') {
+      payload = {
+        items: [{
+          id: 'summary-1',
+          name: project + ' maintenance',
+          created: { value: createdAt },
+          annotations: { indices: { 'annotation-1': {} } },
+        }],
+      }
+    }
+    if (tool === 'annotations_batch_snapshot') {
+      payload = {
+        items: [{
+          id: 'annotation-1',
+          type: 'SUMMARY',
+          text: '- Rewrote the parser to preserve approved content',
+        }],
+      }
+    }
+  }
+
+  const result = body.method === 'tools/call'
+    ? { content: [{ type: 'text', text: JSON.stringify(payload) }] }
+    : {}
+  return new Response(
+    JSON.stringify({ jsonrpc: '2.0', id: body.id, result }),
+    { status: 200, headers: { 'Content-Type': 'application/json', 'mcp-session-id': 'test' } },
+  )
+}
+`,
+      'utf8',
+    )
+
+    const cancelled = await runCli(root, preloadPath, 'n\n')
+    assert.equal(cancelled.code, 1, cancelled.stderr)
+    assert.match(cancelled.stdout, /Proposed changes to AGENTS\.md/)
+    assert.equal(await readFile(targetPath, 'utf8'), original)
+
+    const approved = await runCli(root, preloadPath, 'y\n')
+    assert.equal(approved.code, 0, approved.stderr)
+    assert.match(approved.stdout, /Wrote AGENTS\.md with 1 memories/)
+
+    const written = await readFile(targetPath, 'utf8')
+    assert.match(written, /Keep me\./)
+    assert.match(written, /Rewrote the parser to preserve approved content/)
+  } finally {
+    await rm(root, { recursive: true, force: true })
+  }
 })
 
 test('detectCandidateEntities flags an unknown mid-sentence proper noun', () => {

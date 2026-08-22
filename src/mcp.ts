@@ -40,7 +40,7 @@ export const parseEventStreamMessage = (raw: string, requestId?: string): unknow
 
   if (requestId !== undefined) {
     const matching = messages.find((message) => isRecord(message) && message.id === requestId)
-    if (matching !== undefined) return matching
+    return matching ?? null
   }
 
   const response = messages.find(
@@ -93,6 +93,9 @@ export class McpClient {
     method: string,
     params: Record<string, unknown>,
   ): Promise<Result<JsonRpcResponse, SyncFailure>> {
+    const responseFailure = method === 'initialize'
+      ? SyncFailure.McpHandshakeFailed
+      : SyncFailure.McpCallFailed
     const headers: Record<string, string> = {
       'Content-Type': 'application/json',
       Accept: 'application/json, text/event-stream',
@@ -122,28 +125,35 @@ export class McpClient {
 
     if (!response.ok) {
       process.stderr.write(`  PiecesOS answered ${response.status} ${response.statusText}\n`)
-      return err(method === 'initialize' ? SyncFailure.McpHandshakeFailed : SyncFailure.McpCallFailed)
+      return err(responseFailure)
     }
 
     const returnedSession = response.headers.get('mcp-session-id')
     if (returnedSession) this.sessionId = returnedSession
 
-    const raw = await response.text()
+    let raw: string
+    try {
+      raw = await response.text()
+    } catch (caught) {
+      if (isTimeout(caught)) return err(SyncFailure.McpTimeout)
+      return err(responseFailure)
+    }
 
     let parsed: unknown
     try {
       parsed = JSON.parse(raw)
     } catch {
       parsed = parseEventStreamMessage(raw, requestId)
-      if (parsed === null) return err(SyncFailure.McpCallFailed)
+      if (parsed === null) return err(responseFailure)
     }
 
-    if (!isRecord(parsed)) return err(SyncFailure.McpCallFailed)
+    if (!isRecord(parsed)) return err(responseFailure)
+    if (parsed.id !== requestId) return err(responseFailure)
 
     if (isRecord(parsed.error)) {
       const detail = typeof parsed.error.message === 'string' ? parsed.error.message : 'no detail'
       process.stderr.write(`  PiecesOS refused the call: ${detail}\n`)
-      return err(SyncFailure.McpCallFailed)
+      return err(responseFailure)
     }
 
     return ok(parsed as JsonRpcResponse)

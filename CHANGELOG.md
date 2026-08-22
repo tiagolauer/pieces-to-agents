@@ -1,5 +1,23 @@
 # Changelog
 
+## 0.1.20
+
+Root-level documents and local planning notes could become project vocabulary. Generic words such as
+"security" or "architecture" then anchored unrelated bullets from a mixed session. Root files no
+longer contribute vocabulary; project names, aliases, package metadata, and first-level names inside
+project directories still do.
+
+Absolute path redaction now covers POSIX roots beyond `/home`, `/Users`, `/mnt`, and `/srv`, plus
+Windows UNC paths. A private path in lowercase can no longer bypass both the path scrubber and the
+proper-noun hint.
+
+MCP responses must now match the request identifier. Truncated response bodies return a typed
+failure instead of escaping the Result boundary. A child-process regression test also proves that
+the CLI leaves the target untouched after rejection and preserves handwritten content after
+approval.
+
+CI now grants read-only repository access and uses the Node 24-based checkout and setup-node actions.
+
 ## 0.1.19
 
 Aliases were applied only after search results came back, while every MCP query still used the

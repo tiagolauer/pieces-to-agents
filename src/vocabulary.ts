@@ -68,9 +68,9 @@ export const collectProjectVocabulary = async (
     const entries = await readdir(repositoryRoot, { withFileTypes: true })
     for (const entry of entries) {
       if (IGNORED_ENTRIES.has(entry.name) || entry.name.startsWith('.')) continue
-      addTerm(vocabulary, entry.name.replace(/\.[a-z0-9]+$/i, ''))
-
       if (!entry.isDirectory()) continue
+
+      addTerm(vocabulary, entry.name)
       const children = await readdir(join(repositoryRoot, entry.name), { withFileTypes: true })
       for (const child of children) {
         if (IGNORED_ENTRIES.has(child.name) || child.name.startsWith('.')) continue
