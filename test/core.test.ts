@@ -1,10 +1,10 @@
 import assert from 'node:assert/strict'
 import { spawn } from 'node:child_process'
-import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises'
+import { mkdir, mkdtemp, readFile, rm, symlink, writeFile } from 'node:fs/promises'
 import { createServer, type IncomingMessage } from 'node:http'
 import type { AddressInfo } from 'node:net'
 import { tmpdir } from 'node:os'
-import { join } from 'node:path'
+import { dirname, join } from 'node:path'
 import { test } from 'node:test'
 import { fileURLToPath, pathToFileURL } from 'node:url'
 import { composeBlock, spliceManagedBlock, trimTitleToProject } from '../src/agents-file.ts'
@@ -643,6 +643,299 @@ test('collectProjectVocabulary reads a package.json that starts with a BOM', asy
   assert.equal(vocabulary.has('widget'), true)
   assert.equal(vocabulary.has('factory'), true)
   assert.equal(vocabulary.has('knexjs'), true)
+})
+
+const manifestVocabularyCases: ReadonlyArray<{
+  readonly filename: string
+  readonly content: string
+  readonly expectedTerms: ReadonlyArray<string>
+  readonly excludedTerms?: ReadonlyArray<string>
+}> = [
+  {
+    filename: 'pyproject.toml',
+    content: `[project]
+name = """signal-bridge"""
+description = """
+[tool.poetry.dependencies]
+private-client = "1"
+"""
+dependencies = [
+  """urllib3>=2""",
+  "httpx>=0.27",
+  "requests[socks]>=2",
+  "pydantic-settings[dotenv]>=2"
+] # "private-client"
+
+[project.optional-dependencies]
+docs = ["mkdocs-material>=9"]
+
+[tool.poetry.dependencies]
+python = "^3.12"
+rich-click = "^1.8"
+
+[tool.poetry.group.dev.dependencies]
+ruff = "^0.12"
+`,
+    expectedTerms: [
+      'signal', 'bridge', 'urllib3', 'httpx', 'requests', 'pydantic', 'settings', 'mkdocs', 'material', 'rich', 'click', 'ruff',
+    ],
+    excludedTerms: ['private-client', 'private', 'client'],
+  },
+  {
+    filename: 'go.mod',
+    content: `module example.com/acme/ledger-service
+
+require (
+  github.com/jackc/pgx/v5 v5.7.0
+  golang.org/x/sync v0.16.0 // indirect
+)
+
+require github.com/stretchr/testify v1.10.0
+`,
+    expectedTerms: ['ledger', 'jackc', 'pgx', 'stretchr', 'testify'],
+  },
+  {
+    filename: 'Cargo.toml',
+    content: `[package]
+name = '''event-router'''
+description = '''
+[dependencies]
+private-client = "1"
+'''
+
+[dependencies]
+serde_json = "1"
+
+[dev-dependencies]
+proptest = "1"
+
+[build-dependencies]
+bindgen = "0.72"
+
+[workspace.dependencies]
+tracing = "0.1"
+
+[target.'cfg(unix)'.dependencies]
+libc = "0.2"
+
+[dependencies.reqwest]
+version = "0.12"
+`,
+    expectedTerms: [
+      'event', 'router', 'serde_json', 'serde', 'proptest', 'bindgen', 'tracing', 'libc', 'reqwest',
+    ],
+  },
+  {
+    filename: 'src/Payments.Worker/Payments.Worker.csproj',
+    content: `<!DOCTYPE Project [
+  <!-- ]> -->
+  <!ENTITY fake "<PackageReference Include='Private.Client' />">
+]>
+<Project Sdk="Microsoft.NET.Sdk">
+  <?probe <AssemblyName>Private.Client</AssemblyName><PackageReference Include="Private.Client" /> ?>
+  <!-- documentation mentions <![CDATA[ syntax -->
+  <PropertyGroup>
+    <AssemblyName>Acme.Billing.Runtime</AssemblyName>
+  </PropertyGroup>
+  <ItemGroup>
+    <PackageReference Include="Npgsql" Version="8.0.0" />
+    <PackageReference Update="Serilog.Sinks.Console" Version="6.0.0" />
+    <!-- <PackageReference Include="Private.Client" Version="1.0.0" /> -->
+    <![CDATA[
+      <AssemblyName>Private.Client</AssemblyName>
+      <PackageReference Include="Private.Client" Version="1.0.0" />
+    ]]>
+  </ItemGroup>
+</Project>
+`,
+    expectedTerms: ['payments', 'acme', 'billing', 'npgsql', 'serilog', 'sinks'],
+    excludedTerms: ['private.client', 'private', 'client'],
+  },
+  {
+    filename: 'composer.json',
+    content: JSON.stringify({
+      name: 'acme/report-engine',
+      require: {
+        composer: '*',
+        'composer-plugin-api': '*',
+        'composer-runtime-api': '*',
+        'ext-json': '*',
+        'guzzlehttp/guzzle': '^7.9',
+        'lib-curl': '*',
+        php: '>=8.3',
+        'php-64bit': '*',
+        'php-debug': '*',
+        'php-ipv6': '*',
+        'php-zts': '*',
+      },
+      'require-dev': { 'phpunit/phpunit': '^11.0' },
+    }),
+    expectedTerms: ['acme', 'report', 'engine', 'guzzlehttp', 'guzzle', 'phpunit'],
+    excludedTerms: ['64bit', 'composer', 'curl', 'debug', 'ext-json', 'ipv6', 'plugin', 'runtime-api', 'zts'],
+  },
+  {
+    filename: 'Gemfile',
+    content: `source "https://rubygems.org"
+gem "sidekiq"
+gem('dry-monads', '~> 1.6')
+=begin
+gem "private-client"
+=end
+message = <<~TEXT
+gem "private-client"
+TEXT
+first, second = <<FIRST, <<SECOND
+plain text
+FIRST
+gem "private-client"
+SECOND
+plain = <<PLAIN
+  PLAIN
+gem "private-client"
+PLAIN
+groups = []
+optional_group = :development
+groups << optional_group
+gem "remote-source", git: "https://example.test/repo?token=<<END"
+gem "after-url"
+`,
+    expectedTerms: [
+      'sidekiq', 'dry-monads', 'dry', 'monads', 'remote-source', 'remote', 'source', 'after-url', 'after',
+    ],
+    excludedTerms: ['private-client', 'private', 'client'],
+  },
+]
+
+for (const manifest of manifestVocabularyCases) {
+  test(`collectProjectVocabulary reads ${manifest.filename}`, async (t) => {
+    const root = await mkdtemp(join(tmpdir(), 'p2a-manifest-'))
+    t.after(async () => { await rm(root, { recursive: true, force: true }) })
+    const manifestPath = join(root, manifest.filename)
+    await mkdir(dirname(manifestPath), { recursive: true })
+    await writeFile(manifestPath, manifest.content, 'utf8')
+
+    const vocabulary = await collectProjectVocabulary(root, [])
+
+    for (const term of manifest.expectedTerms) assert.equal(vocabulary.has(term), true, term)
+    for (const term of manifest.excludedTerms ?? []) assert.equal(vocabulary.has(term), false, term)
+    assert.equal(vocabulary.has('com'), false)
+    assert.equal(vocabulary.has('php'), false)
+    assert.equal(vocabulary.has('python'), false)
+  })
+}
+
+test('collectProjectVocabulary stays empty when optional manifests are missing', async (t) => {
+  const root = await mkdtemp(join(tmpdir(), 'p2a-no-manifest-'))
+  t.after(async () => { await rm(root, { recursive: true, force: true }) })
+
+  const vocabulary = await collectProjectVocabulary(root, [])
+
+  assert.deepEqual([...vocabulary], [])
+})
+
+test('collectProjectVocabulary ignores malformed optional manifests', async (t) => {
+  const root = await mkdtemp(join(tmpdir(), 'p2a-bad-manifest-'))
+  t.after(async () => { await rm(root, { recursive: true, force: true }) })
+  const malformedFiles = [
+    ['package.json', '{'],
+    ['pyproject.toml', '['],
+    ['go.mod', 'require'],
+    ['Cargo.toml', '[dependencies'],
+    ['broken.csproj', '<Project><PackageReference'],
+    ['composer.json', '{'],
+    ['Gemfile', 'gem'],
+  ] as const
+
+  for (const [filename, content] of malformedFiles) {
+    await writeFile(join(root, filename), content, 'utf8')
+  }
+
+  const vocabulary = await collectProjectVocabulary(root, [])
+
+  assert.deepEqual([...vocabulary], [])
+})
+
+test('collectProjectVocabulary ignores oversized manifests', async (t) => {
+  const root = await mkdtemp(join(tmpdir(), 'p2a-large-manifest-'))
+  t.after(async () => { await rm(root, { recursive: true, force: true }) })
+  const padding = 'x'.repeat(300_000)
+  await writeFile(join(root, 'package.json'), JSON.stringify({ name: 'private-client', padding }), 'utf8')
+
+  const vocabulary = await collectProjectVocabulary(root, [])
+
+  assert.deepEqual([...vocabulary], [])
+})
+
+test('collectProjectVocabulary caps terms from a large manifest', async (t) => {
+  const root = await mkdtemp(join(tmpdir(), 'p2a-many-terms-'))
+  t.after(async () => { await rm(root, { recursive: true, force: true }) })
+  const dependencies = Object.fromEntries(
+    Array.from({ length: 5_100 }, (_, index) => [`dependency-${index}`, '*']),
+  )
+  await writeFile(join(root, 'package.json'), JSON.stringify({ dependencies }), 'utf8')
+
+  const vocabulary = await collectProjectVocabulary(root, [])
+
+  assert.equal(vocabulary.size, 600)
+})
+
+test('collectProjectVocabulary preserves terms from each manifest source', async (t) => {
+  const root = await mkdtemp(join(tmpdir(), 'p2a-fair-manifests-'))
+  t.after(async () => { await rm(root, { recursive: true, force: true }) })
+  const dependencies = Object.fromEntries(
+    Array.from({ length: 1_000 }, (_, index) => [`dependency-${index}`, '*']),
+  )
+  await writeFile(join(root, 'package.json'), JSON.stringify({ dependencies }), 'utf8')
+  await writeFile(
+    join(root, 'pyproject.toml'),
+    `[project]
+dependencies = ${JSON.stringify([
+      'sqlalchemy>=2',
+      ...Array.from({ length: 5_100 }, (_, index) => `unique${index}`),
+    ])}
+name = "critical-python-service"
+`,
+    'utf8',
+  )
+  await writeFile(
+    join(root, 'Cargo.toml'),
+    '[package]\nname = "critical-rust-service"\n[dependencies]\ntokio = "1"\n',
+    'utf8',
+  )
+
+  const vocabulary = await collectProjectVocabulary(root, [])
+
+  for (const term of ['critical-python-service', 'sqlalchemy', 'critical-rust-service', 'tokio']) {
+    assert.equal(vocabulary.has(term), true, term)
+  }
+})
+
+test('collectProjectVocabulary ignores symlinked manifests', async (t) => {
+  const root = await mkdtemp(join(tmpdir(), 'p2a-symlink-manifest-'))
+  const outside = await mkdtemp(join(tmpdir(), 'p2a-outside-manifest-'))
+  t.after(async () => {
+    await rm(root, { recursive: true, force: true })
+    await rm(outside, { recursive: true, force: true })
+  })
+  const outsideManifest = join(outside, 'package.json')
+  await writeFile(outsideManifest, '{"name":"private-client"}', 'utf8')
+
+  try {
+    await symlink(outsideManifest, join(root, 'package.json'), 'file')
+  } catch (error) {
+    const code = error instanceof Error && 'code' in error
+      ? (error as NodeJS.ErrnoException).code
+      : undefined
+    if (code === 'EPERM' || code === 'EACCES') {
+      t.skip(`symlinks unavailable: ${code}`)
+      return
+    }
+    throw error
+  }
+
+  const vocabulary = await collectProjectVocabulary(root, [])
+
+  assert.deepEqual([...vocabulary], [])
 })
 
 test('isAnchoredToProject drops bullets from a mixed session', () => {

@@ -137,9 +137,11 @@ Six things stand between your memory and the file:
    projects in passing all the time, and one stray mention used to drag an entire unrelated
    work session into the file.
 4. Each bullet has to touch the project's own vocabulary, built from your file and folder
-   names, your `package.json` and the aliases you passed. A real session titled "OwlSQL
-   Refactoring and Job Search" carries bullets about both, and only the ones anchored to the
-   repository survive. Anything Pieces tagged with an identified person is dropped outright.
+   names, the aliases you passed, and supported manifests: `package.json`, `pyproject.toml`,
+   `go.mod`, `Cargo.toml`, `*.csproj`, `composer.json` and `Gemfile`. A real session titled
+   "OwlSQL Refactoring and Job Search" carries bullets about both, and only the ones anchored
+   to the repository survive. Anything Pieces tagged with an identified person is dropped
+   outright.
 5. Emails, JWTs, GitHub and Slack tokens and AWS keys are replaced automatically. Names,
    employers and client codenames go in `.pieces-to-agents-ignore`, one per line. A bullet that
    mentions one of those terms is removed entirely rather than masked, because the sentence
