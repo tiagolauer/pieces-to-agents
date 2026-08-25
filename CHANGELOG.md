@@ -1,5 +1,16 @@
 # Changelog
 
+## 0.1.21
+
+Project vocabulary now includes package names, dependencies and distinctive terms from
+`pyproject.toml`, `go.mod`, `Cargo.toml`, `*.csproj`, `composer.json` and `Gemfile`. The CLI can
+therefore scope Pieces memories accurately in Python, Go, Rust, .NET, PHP and Ruby repositories,
+not only Node.js projects.
+
+Optional manifests are read defensively: malformed, oversized and symlinked files are ignored,
+while valid project metadata remains isolated by source so unrelated manifests cannot influence
+one another.
+
 ## 0.1.20
 
 Root-level documents and local planning notes could become project vocabulary. Generic words such as
